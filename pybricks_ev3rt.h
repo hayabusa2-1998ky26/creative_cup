@@ -62,18 +62,19 @@ namespace pybricks {
     private:
         Motor* left_motor;
         Motor* right_motor;
-        float wheel_diameter; // 車輪径 (mm)
-        float axle_track;     // 車幅/トレッド (mm)
+        float wheel_diameter; 
+        float axle_track;     
 
-        // カラーセンサー位置座標（車軸中心基準: mm）
         float left_sensor_x;
         float left_sensor_y;
         float right_sensor_x;
         float right_sensor_y;
-        float sensor_width;   // 左右センサー間距離 (mm)
+        float sensor_width;   
 
-        // 動作用パラメータ
+        float control_period_ms; 
         float min_speed;
+        float decel_margin;      
+        float line_blind_dist;   
         float default_straight_speed;
         float default_straight_accel;
         float default_turn_rate;
@@ -85,29 +86,42 @@ namespace pybricks {
         int config_tolerance;
         int config_target_val;
 
-        // drive() メソッド用同期状態保持
         bool drive_sync_initialized;
         int32_t drive_start_left;
         int32_t drive_start_right;
 
+        // オドメトリ（自己位置推定）用変数
+        float pose_x;      // mm
+        float pose_y;      // mm
+        float pose_theta;  // rad
+        int32_t prev_left_enc;
+        int32_t prev_right_enc;
+
+        // すべてのモーター出力を一元管理し、FF比率を適用する関数
+        void run_motors(float left_target, float right_target);
+
+        // 左右同期計算関数
+        float calculate_sync_p(int32_t left_moved, int32_t right_moved, bool is_turn = false);
+
+        // オドメトリ関連処理
+        void reset_odometry();
+        void update_odometry(int32_t cur_left, int32_t cur_right);
+        float calculate_lookahead_heading_pd(float lookahead_dist_mm);
+
     public:
         DriveBase(Motor& left, Motor& right, float wheel_diameter_mm, float axle_track_mm);
 
-        // センサー座標設定メソッド (左X, 左Y, 右X, 右Y)
         void set_sensor_coordinates(float left_x, float left_y, float right_x, float right_y);
 
-        // 速度・加速度設定メソッド
         void settings(float straight_speed, float straight_acceleration = DriveConfig::straight_accel, float turn_rate = DriveConfig::turn_rate, float turn_acceleration = DriveConfig::turn_accel);
         
         void straight(float distance_mm, Stop then = Stop::HOLD, bool wait = true);
         void turn(float angle_deg, Stop then = Stop::HOLD, bool wait = true);
         void drive(float speed_mm_per_sec, float turn_rate_deg_per_sec);
         
-        // 直進アライメント straight_line
-        void straight_line(ColorSensor& left_sensor, ColorSensor& right_sensor, float distance_mm, float speed_mm_per_sec = 120.0f, int target_val = -1);
+        void straight_line(ColorSensor& left_sensor, ColorSensor& right_sensor, float distance_mm = 0.0f, float speed_mm_per_sec = -1.0f, int target_val = -1, bool skip_white_exit_check = false);
 
-        // 幾何自動位置補正 straight_lines
-        void straight_lines(ColorSensor& left_sensor, ColorSensor& right_sensor, int line_count, float speed_mm_per_sec = 150.0f, int target_val = -1);
+        void straight_lines(ColorSensor& left_sensor, ColorSensor& right_sensor, int line_count, float distance_mm = 0.0f, float speed_mm_per_sec = -1.0f, int target_val = -1);
 
         void stop();
         void brake();
