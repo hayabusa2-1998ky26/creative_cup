@@ -23,7 +23,7 @@ void main_task(intptr_t unused) {
     right_sensor = new pybricks::ColorSensor(EV3_PORT_3);
 
     // タイヤ径と車輪間隔を設定
-    robot = new pybricks::DriveBase(*left_motor, *right_motor, 62.5f, 184.0f);
+    robot = new pybricks::DriveBase(*left_motor, *right_motor, *left_sensor, *right_sensor, 62.5f, 184.0f);
 
     // 実行したいプログラム
     run_main_course();

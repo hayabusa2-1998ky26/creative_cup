@@ -114,8 +114,8 @@ namespace pybricks {
     // DriveBase Class Implementation
     // ==========================================
 
-    DriveBase::DriveBase(Motor& left, Motor& right, float wheel_diam, float axle_track_dist)
-        : left_motor(&left), right_motor(&right), wheel_diameter(wheel_diam), axle_track(axle_track_dist) {
+    DriveBase::DriveBase(Motor& left, Motor& right, ColorSensor& left_sens, ColorSensor& right_sens, float wheel_diam, float axle_track_dist)
+        : left_motor(&left), right_motor(&right), left_sensor(&left_sens), right_sensor(&right_sens), wheel_diameter(wheel_diam), axle_track(axle_track_dist) {
         
         control_period_ms = DriveConfig::period_ms;
         min_speed = DriveConfig::min_speed;
@@ -142,16 +142,14 @@ namespace pybricks {
         prev_left_enc = 0;
         prev_right_enc = 0;
 
-        set_sensor_coordinates(-axle_track_dist / 2.0f, 50.0f, axle_track_dist / 2.0f, 50.0f);
+        set_sensor_coordinates(axle_track_dist / 2.0f, 50.0f);
     }
 
-    // すべてのモーター出力を一元管理し、右モーターにFF比率を適用する関数
     void DriveBase::run_motors(float left_target, float right_target) {
         left_motor->run((int)left_target);
         right_motor->run((int)(right_target * DriveConfig::motor_ff_ratio));
     }
 
-    // 左右同期計算関数（turnやstraight_linesなど各種操作用）
     float DriveBase::calculate_sync_p(int32_t left_moved, int32_t right_moved, bool is_turn) {
         float diff = is_turn ? (float)(left_moved + right_moved) : (float)(left_moved - right_moved);
 
@@ -190,7 +188,6 @@ namespace pybricks {
         return sync_p;
     }
 
-    // オドメトリのリセット
     void DriveBase::reset_odometry() {
         pose_x = 0.0f;
         pose_y = 0.0f;
@@ -199,7 +196,6 @@ namespace pybricks {
         prev_right_enc = right_motor->angle();
     }
 
-    // 毎周期呼び出す自己位置推定（オドメトリ更新）
     void DriveBase::update_odometry(int32_t cur_left, int32_t cur_right) {
         float wheel_circ = wheel_diameter * M_PI;
         
@@ -221,12 +217,17 @@ namespace pybricks {
         while (pose_theta < -M_PI) pose_theta += 2.0f * (float)M_PI;
     }
 
-    // ★ 乗算型補正用の比率 u を出力する前方注視点PD制御
-    float DriveBase::calculate_lookahead_heading_pd(float lookahead_dist_mm) {
-        float target_x = pose_x + lookahead_dist_mm;
-        float target_y = 0.0f; // 直進ライン(y=0)
+    float DriveBase::calculate_lookahead_heading_pd(float lookahead_dist_mm, float dir) {
+        float lookahead_sign = (dir >= 0.0f) ? 1.0f : -1.0f;
+        float target_x = pose_x + (lookahead_dist_mm * lookahead_sign);
+        float target_y = 0.0f; 
 
         float target_theta = atan2f(target_y - pose_y, target_x - pose_x);
+        
+        if (lookahead_sign < 0.0f) {
+            target_theta += (float)M_PI;
+        }
+
         float error_theta = target_theta - pose_theta;
 
         while (error_theta > M_PI)  error_theta -= 2.0f * (float)M_PI;
@@ -236,8 +237,6 @@ namespace pybricks {
         float dt = control_period_ms / 1000.0f;
         if (dt <= 0.0f) dt = 0.010f;
 
-        // --- 乗算型(比率) 用ゲイン ---
-        // 角度偏差(rad) に対する 速度補正比率 u (例: 0.1 で 10% 補正)
         const float Kp = 2.0f;   
         const float Kd = 0.1f;   
 
@@ -246,7 +245,6 @@ namespace pybricks {
 
         float u = (Kp * error_theta) + (Kd * derivative);
 
-        // 補正比率の最大値を ±30% (0.3) に制限
         const float MAX_U = 0.30f;
         if (u > MAX_U)  u = MAX_U;
         if (u < -MAX_U) u = -MAX_U;
@@ -254,13 +252,22 @@ namespace pybricks {
         return u;
     }
 
-    void DriveBase::set_sensor_coordinates(float left_x, float left_y, float right_x, float right_y) {
-        left_sensor_x = left_x;
-        left_sensor_y = left_y;
-        right_sensor_x = right_x;
-        right_sensor_y = right_y;
+    void DriveBase::run_straight_sync(float base_speed, int32_t cur_left, int32_t cur_right, float lookahead_dist) {
+        update_odometry(cur_left, cur_right);
 
-        sensor_width = sqrtf(powf(right_x - left_x, 2.0f) + powf(right_y - left_y, 2.0f));
+        float dir = (base_speed >= 0.0f) ? 1.0f : -1.0f;
+        float u = calculate_lookahead_heading_pd(lookahead_dist, dir);
+        float turn_power = fabsf(base_speed) * u;
+
+        float left_target  = base_speed - turn_power;
+        float right_target = base_speed + turn_power;
+
+        run_motors(left_target, right_target);
+    }
+
+    void DriveBase::set_sensor_coordinates(float sensor_x_mm, float sensor_y_mm) {
+        sensor_x = fabsf(sensor_x_mm);
+        sensor_y = sensor_y_mm;
     }
 
     void DriveBase::settings(float straight_speed, float straight_acceleration, float turn_rate, float turn_acceleration) {
@@ -270,7 +277,6 @@ namespace pybricks {
         default_turn_accel = turn_acceleration;
     }
 
-    // ★ 車速依存スケーリング（乗算型補正）適用版 straight
     void DriveBase::straight(float distance_mm, Stop then, bool wait) {
         if (fabsf(distance_mm) < 1.0f) return;
 
@@ -305,8 +311,6 @@ namespace pybricks {
             int32_t right_moved = cur_right - start_right;
             float avg_moved = (fabsf((float)left_moved) + fabsf((float)right_moved)) / 2.0f;
 
-            update_odometry(cur_left, cur_right);
-
             int32_t current_diff = left_moved - right_moved;
             int32_t abs_diff = labs(current_diff);
             if (abs_diff > max_abs_diff) {
@@ -340,15 +344,7 @@ namespace pybricks {
 
             float base_speed = dir * current_speed;
 
-            // ★ 補正比率 u を取得 (最大 ±0.30)
-            float u = calculate_lookahead_heading_pd(80.0f);
-
-            // ★ 車速依存スケーリング（乗算型）によるモーター出力の合成
-            // base_speed が大きければ大きな差分、小さくなれば自動的に小さな差分になる
-            float left_target  = base_speed * (1.0f - u);
-            float right_target = base_speed * (1.0f + u);
-
-            run_motors(left_target, right_target);
+            run_straight_sync(base_speed, cur_left, cur_right);
 
             tslp_tsk(sleep_us);
         }
@@ -415,9 +411,9 @@ namespace pybricks {
         else brake();
     }
 
-    void DriveBase::straight_line(ColorSensor& left_sensor, ColorSensor& right_sensor, float distance_mm, float speed_mm_per_sec, int target_val, bool skip_white_exit_check) {
+    void DriveBase::straight_line(float distance_mm, float speed_mm_per_sec, int target_val, bool skip_white_exit_check) {
         int target = (target_val < 0) ? config_target_val : target_val;
-        float run_speed_mm = (speed_mm_per_sec <= 0.0f) ? default_straight_speed : speed_mm_per_sec;
+        float run_speed_mm = (speed_mm_per_sec == 0.0f) ? default_straight_speed : fabsf(speed_mm_per_sec);
 
         float dt = control_period_ms / 1000.0f;
         ulong_t sleep_us = (ulong_t)(control_period_ms * 1000.0f);
@@ -428,7 +424,14 @@ namespace pybricks {
         int32_t start_left = left_motor->angle();
         int32_t start_right = right_motor->angle();
 
-        float dir = (distance_mm >= 0) ? 1.0f : -1.0f;
+        reset_odometry();
+
+        float dir = 1.0f;
+        if (distance_mm != 0.0f) {
+            dir = (distance_mm > 0.0f) ? 1.0f : -1.0f;
+        } else {
+            dir = (speed_mm_per_sec >= 0.0f) ? 1.0f : -1.0f;
+        }
 
         float max_speed = (run_speed_mm / wheel_circ) * 360.0f; 
         float accel = (default_straight_accel / wheel_circ) * 360.0f;
@@ -445,14 +448,14 @@ namespace pybricks {
 
         bool waiting_for_white_exit = false;
         if (!skip_white_exit_check) {
-            int init_l = left_sensor.reflection();
-            int init_r = right_sensor.reflection();
+            int init_l = left_sensor->reflection();
+            int init_r = right_sensor->reflection();
             waiting_for_white_exit = (init_l <= target + 10 || init_r <= target + 10);
         }
 
         while (true) {
-            int l_val = left_sensor.reflection();
-            int r_val = right_sensor.reflection();
+            int l_val = left_sensor->reflection();
+            int r_val = right_sensor->reflection();
 
             if (waiting_for_white_exit) {
                 if (l_val > target + 8 && r_val > target + 8) {
@@ -480,7 +483,7 @@ namespace pybricks {
                     decel_dist = ((current_speed * current_speed - min_speed * min_speed) / (2.0f * accel)) * decel_margin;
                 }
 
-                if (distance_mm > 0.0f && remaining_deg <= decel_dist) {
+                if (distance_mm != 0.0f && remaining_deg <= decel_dist) {
                     current_speed -= accel * dt;
                     if (current_speed < min_speed) current_speed = min_speed;
                 } else if (current_speed < max_speed) {
@@ -488,11 +491,13 @@ namespace pybricks {
                     if (current_speed > max_speed) current_speed = max_speed;
                 }
 
-                float sync_p = calculate_sync_p(left_moved, right_moved);
+                if (distance_mm != 0.0f && remaining_deg <= 0.0f) {
+                    break;
+                }
 
-                run_motors(dir * current_speed - sync_p, dir * current_speed + sync_p);
+                run_straight_sync(dir * current_speed, cur_left, cur_right);
 
-            } else {
+              } else {
                 float l_error = (float)(l_val - target);
                 float r_error = (float)(r_val - target);
 
@@ -526,7 +531,8 @@ namespace pybricks {
                 if (r_output > 120.0f) r_output = 120.0f;
                 if (r_output < -120.0f) r_output = -120.0f;
 
-                run_motors(dir * l_output, dir * r_output);
+                float align_dir = (dir >= 0.0f) ? 1.0f : -1.0f;
+                run_motors(align_dir * l_output, align_dir * r_output);
             }
 
             tslp_tsk(sleep_us);
@@ -535,8 +541,11 @@ namespace pybricks {
         brake();
     }
 
-    void DriveBase::straight_lines(ColorSensor& left_sensor, ColorSensor& right_sensor, int line_count, float distance_mm, float speed_mm_per_sec, int target_val) {
-        if (line_count <= 0) return;
+    void DriveBase::straight_lines(int line_count, float distance_mm, float speed_mm_per_sec, int target_val) {
+        if (line_count == 0) return;
+
+        float dir = (line_count > 0) ? 1.0f : -1.0f;
+        int target_lines = abs(line_count);
 
         int target = (target_val < 0) ? config_target_val : target_val;
         float run_speed_mm = (speed_mm_per_sec <= 0.0f) ? default_straight_speed : speed_mm_per_sec;
@@ -547,30 +556,30 @@ namespace pybricks {
         float wheel_circ = wheel_diameter * M_PI;
         float target_run_speed = (run_speed_mm / wheel_circ) * 360.0f;
         float accel = (default_straight_accel / wheel_circ) * 360.0f;
-
+        
         float target_deg = fabsf((distance_mm / wheel_circ) * 360.0f);
 
         int32_t start_left = left_motor->angle();
         int32_t start_right = right_motor->angle();
 
+        reset_odometry();
+
         float current_speed = min_speed;
-
         int crossed_lines = 0;
+
+        bool l_in_line = false, r_in_line = false;
+        int32_t l_enter_deg = 0, l_exit_deg = 0;
+        int32_t r_enter_deg = 0, r_exit_deg = 0;
+
         bool in_line_zone = false;
-
-        bool first_detected = false;
-        bool first_is_left = false;
-        bool alignment_done = false; 
-
-        int32_t white_start_left = start_left;
-        int32_t white_start_right = start_right;
+        bool align_processing = false;
 
         bool has_detected_any_line = false;
         int32_t last_line_detected_l = start_left;
         int32_t last_line_detected_r = start_right;
 
-        int init_l = left_sensor.reflection();
-        int init_r = right_sensor.reflection();
+        int init_l = left_sensor->reflection();
+        int init_r = right_sensor->reflection();
         bool waiting_for_white_exit = (init_l <= target || init_r <= target);
 
         ev3_lcd_set_font(EV3_FONT_MEDIUM);
@@ -580,11 +589,11 @@ namespace pybricks {
         while (true) {
             int32_t cur_left_total = left_motor->angle();
             int32_t cur_right_total = right_motor->angle();
+            int32_t cur_forward = (cur_left_total + cur_right_total) / 2;
 
             int32_t total_left_moved = cur_left_total - start_left;
             int32_t total_right_moved = cur_right_total - start_right;
             float total_avg_moved = (fabsf((float)total_left_moved) + fabsf((float)total_right_moved)) / 2.0f;
-
             float remaining_deg = target_deg - total_avg_moved;
 
             float decel_dist = 0.0f;
@@ -592,7 +601,7 @@ namespace pybricks {
                 decel_dist = ((current_speed * current_speed - min_speed * min_speed) / (2.0f * accel)) * decel_margin;
             }
 
-            if (distance_mm > 0.0f && remaining_deg <= decel_dist) {
+            if (fabsf(distance_mm) > 0.0f && remaining_deg <= decel_dist) {
                 current_speed -= accel * dt;
                 if (current_speed < min_speed) current_speed = min_speed;
             } else if (current_speed < target_run_speed) {
@@ -600,109 +609,91 @@ namespace pybricks {
                 if (current_speed > target_run_speed) current_speed = target_run_speed;
             }
 
-            int l_val = left_sensor.reflection();
-            int r_val = right_sensor.reflection();
-
+            int l_val = left_sensor->reflection();
+            int r_val = right_sensor->reflection();
             bool l_on_black = (l_val <= target);
             bool r_on_black = (r_val <= target);
 
             if (waiting_for_white_exit) {
                 if (l_val > target + 8 && r_val > target + 8) {
                     waiting_for_white_exit = false;
-                    white_start_left = cur_left_total;
-                    white_start_right = cur_right_total;
-
                     has_detected_any_line = true;
                     last_line_detected_l = cur_left_total;
                     last_line_detected_r = cur_right_total;
                 }
             } else {
-                if (l_val > target + 8 && r_val > target + 8) {
-                    if (in_line_zone) {
-                        white_start_left = left_motor->angle();
-                        white_start_right = right_motor->angle();
-                    }
-                    in_line_zone = false;
-                    first_detected = false;
-                    alignment_done = false; 
-                }
-
                 float moved_from_last_line_deg = (fabsf((float)(cur_left_total - last_line_detected_l)) + 
                                                   fabsf((float)(cur_right_total - last_line_detected_r))) / 2.0f;
                 float moved_from_last_line_mm = (moved_from_last_line_deg / 360.0f) * wheel_circ;
-
                 bool blind_ok = !has_detected_any_line || (moved_from_last_line_mm >= line_blind_dist);
 
                 if (!in_line_zone && blind_ok && (l_on_black || r_on_black)) {
                     in_line_zone = true;
                     crossed_lines++;
-
                     has_detected_any_line = true;
                     last_line_detected_l = cur_left_total;
                     last_line_detected_r = cur_right_total;
 
                     ev3_speaker_play_tone(1000, 50);
 
-                    if (crossed_lines >= line_count) {
-                        straight_line(left_sensor, right_sensor, 0.0f, run_speed_mm, target, true);
+                    // 最終ライン到達時
+                    if (crossed_lines >= target_lines) {
+                        straight_line(0.0f, dir * run_speed_mm, target, true);
                         return;
                     }
+
+                    align_processing = true;
+                    l_in_line = l_on_black;
+                    r_in_line = r_on_black;
+                    l_enter_deg = l_on_black ? cur_forward : 0;
+                    r_enter_deg = r_on_black ? cur_forward : 0;
+                    l_exit_deg = 0;
+                    r_exit_deg = 0;
                 }
-            }
-
-            if (in_line_zone && !waiting_for_white_exit) {
-                if (!alignment_done) {
-                    if (!first_detected) {
-                        first_detected = true;
-
-                        if (l_on_black && !r_on_black) {
-                            first_is_left = true;
-                            run_motors(0, current_speed);
-                        } else if (!l_on_black && r_on_black) {
-                            first_is_left = false;
-                            run_motors(current_speed, 0);
-                        } else {
-                            alignment_done = true;
-                            white_start_left = left_motor->angle();
-                            white_start_right = right_motor->angle();
-                            run_motors(current_speed, current_speed);
-                        }
-                    } else {
-                        if (first_is_left && !r_on_black) {
-                            run_motors(0, current_speed);
-                        } else if (!first_is_left && !l_on_black) {
-                            run_motors(current_speed, 0);
-                        } else {
-                            alignment_done = true;
-                            
-                            white_start_left = left_motor->angle();
-                            white_start_right = right_motor->angle();
-
-                            run_motors(current_speed, current_speed);
-                        }
+                else if (in_line_zone && align_processing) {
+                    if (l_on_black && !l_in_line) {
+                        l_in_line = true;
+                        l_enter_deg = cur_forward;
+                    } else if (!l_on_black && l_in_line) {
+                        l_in_line = false;
+                        l_exit_deg = cur_forward;
                     }
-                } else {
-                    int32_t cur_left = left_motor->angle();
-                    int32_t cur_right = right_motor->angle();
 
-                    int32_t moved_left = cur_left - white_start_left;
-                    int32_t moved_right = cur_right - white_start_right;
+                    if (r_on_black && !r_in_line) {
+                        r_in_line = true;
+                        r_enter_deg = cur_forward;
+                    } else if (!r_on_black && r_in_line) {
+                        r_in_line = false;
+                        r_exit_deg = cur_forward;
+                    }
 
-                    float sync_p = calculate_sync_p(moved_left, moved_right);
+                    if (!l_on_black && !r_on_black && l_exit_deg != 0 && r_exit_deg != 0) {
+                        int32_t l_center = (l_enter_deg + l_exit_deg) / 2;
+                        int32_t r_center = (r_enter_deg + r_exit_deg) / 2;
 
-                    run_motors(current_speed - sync_p, current_speed + sync_p);
+                        int32_t center_diff = l_center - r_center;
+                        float center_diff_mm = ((float)center_diff / 360.0f) * (wheel_diameter * (float)M_PI);
+
+                        float sensor_width_total = 2.0f * sensor_x;
+
+                        // 前回の誤った dir の掛け算を撤回し、元の正しい計算式に戻します
+                        // 前進・後退に関わらず、エンコーダー差分と通過順序の逆転が相殺し合うため
+                        // この数式単体で常に正しい角度・符号が算出されます
+                        float angle_error_rad = asinf(center_diff_mm / sensor_width_total);
+                        pose_theta = angle_error_rad; 
+                        
+                        // Y座標補正もセンサーの物理的な固定位置（sensor_y）に基づくため dir は不要です
+                        pose_y = -sensor_y * sinf(pose_theta);
+
+                        align_processing = false;
+                        in_line_zone = false;
+                        l_exit_deg = 0;
+                        r_exit_deg = 0;
+                    }
                 }
-            } else {
-                int32_t cur_left = left_motor->angle();
-                int32_t cur_right = right_motor->angle();
-
-                int32_t moved_left = cur_left - white_start_left;
-                int32_t moved_right = cur_right - white_start_right;
-
-                float sync_p = calculate_sync_p(moved_left, moved_right);
-
-                run_motors(current_speed - sync_p, current_speed + sync_p);
             }
+
+            run_straight_sync(dir * current_speed, cur_left_total, cur_right_total);
 
             tslp_tsk(sleep_us);
         }

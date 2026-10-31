@@ -62,14 +62,15 @@ namespace pybricks {
     private:
         Motor* left_motor;
         Motor* right_motor;
+        ColorSensor* left_sensor;
+        ColorSensor* right_sensor;
+
         float wheel_diameter; 
         float axle_track;     
 
-        float left_sensor_x;
-        float left_sensor_y;
-        float right_sensor_x;
-        float right_sensor_y;
-        float sensor_width;   
+        // ★ 左右対称のため片側分だけで管理
+        float sensor_x; // 車体中心からセンサーまでの横幅の絶対値
+        float sensor_y; // 車軸からセンサーまでの前方距離
 
         float control_period_ms; 
         float min_speed;
@@ -97,31 +98,26 @@ namespace pybricks {
         int32_t prev_left_enc;
         int32_t prev_right_enc;
 
-        // すべてのモーター出力を一元管理し、FF比率を適用する関数
         void run_motors(float left_target, float right_target);
-
-        // 左右同期計算関数
         float calculate_sync_p(int32_t left_moved, int32_t right_moved, bool is_turn = false);
-
-        // オドメトリ関連処理
         void reset_odometry();
         void update_odometry(int32_t cur_left, int32_t cur_right);
-        float calculate_lookahead_heading_pd(float lookahead_dist_mm);
+        float calculate_lookahead_heading_pd(float lookahead_dist_mm, float dir = 1.0f);
+        void run_straight_sync(float base_speed, int32_t cur_left, int32_t cur_right, float lookahead_dist = 80.0f);
 
     public:
-        DriveBase(Motor& left, Motor& right, float wheel_diameter_mm, float axle_track_mm);
+        DriveBase(Motor& left, Motor& right, ColorSensor& left_sens, ColorSensor& right_sens, float wheel_diameter_mm, float axle_track_mm);
 
-        void set_sensor_coordinates(float left_x, float left_y, float right_x, float right_y);
-
+        // ★ 引数を変更
+        void set_sensor_coordinates(float sensor_x_mm, float sensor_y_mm);
         void settings(float straight_speed, float straight_acceleration = DriveConfig::straight_accel, float turn_rate = DriveConfig::turn_rate, float turn_acceleration = DriveConfig::turn_accel);
         
         void straight(float distance_mm, Stop then = Stop::HOLD, bool wait = true);
         void turn(float angle_deg, Stop then = Stop::HOLD, bool wait = true);
         void drive(float speed_mm_per_sec, float turn_rate_deg_per_sec);
         
-        void straight_line(ColorSensor& left_sensor, ColorSensor& right_sensor, float distance_mm = 0.0f, float speed_mm_per_sec = -1.0f, int target_val = -1, bool skip_white_exit_check = false);
-
-        void straight_lines(ColorSensor& left_sensor, ColorSensor& right_sensor, int line_count, float distance_mm = 0.0f, float speed_mm_per_sec = -1.0f, int target_val = -1);
+        void straight_line(float distance_mm = 0.0f, float speed_mm_per_sec = -1.0f, int target_val = -1, bool skip_white_exit_check = false);
+        void straight_lines(int line_count, float distance_mm = 0.0f, float speed_mm_per_sec = -1.0f, int target_val = -1);
 
         void stop();
         void brake();

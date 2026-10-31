@@ -33,7 +33,7 @@ namespace pybricks {
         static constexpr int tolerance = 30;
         static constexpr int target_val = 30;
 
-        static constexpr float motor_ff_ratio = 0.91f;
+        static constexpr float motor_ff_ratio = 1.0f;
     };
 
 } // namespace pybricks
