@@ -17,7 +17,7 @@ extern pybricks::ColorSensor* right_sensor;
 // キャリブレーション設定値
 // ==========================================
 const float LINE_INTERVAL_MM = 240.0f; 
-const float CALIBRATION_DIST_MM = LINE_INTERVAL_MM * 3.0f; // 1本目から4本目まで
+const float CALIBRATION_DIST_MM = LINE_INTERVAL_MM * 3.0f - 10.0f; // 1本目から4本目まで
 const float CALIB_SPEED_MM_S = 150.0f;
 const float REQUESTED_TURN_DEG = 540.0f; // トレッド幅測定用の旋回角度
 
@@ -43,7 +43,9 @@ void run_calibration() {
     ev3_lcd_draw_string("1/4: Find Line 1", 0, 10);
     db.straight_lines(1, 0.0f, nullptr, 0.0f, CALIB_SPEED_MM_S, -1);
     db.brake();
-    tslp_tsk(500 * 1000); 
+    tslp_tsk(500 * 1000);
+    db.straight(10);
+    tslp_tsk(100 * 1000);
 
     int32_t start_l = l_mot.angle();
     int32_t start_r = r_mot.angle();
