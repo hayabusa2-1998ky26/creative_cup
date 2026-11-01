@@ -1,119 +1,159 @@
+#include "ev3api.h"
 #include "pybricks_ev3rt.h"
+#include "programs.h"
 #include <stdio.h>
 #include <math.h>
 
 using namespace pybricks;
 
+// app.cpp で宣言されているグローバルポインタ
+extern pybricks::DriveBase* robot;
+extern pybricks::Motor* left_motor;
+extern pybricks::Motor* right_motor;
+extern pybricks::ColorSensor* left_sensor;
+extern pybricks::ColorSensor* right_sensor;
+
 // ==========================================
 // キャリブレーション設定値
 // ==========================================
-// 線と線の間隔（ミリメートル）。実際のコースに合わせて変更してください。
-const float LINE_INTERVAL_MM = 100.0f; 
-
-// 4本の線をまたぐため、1本目から4本目までは「3区間」になります
-const float CALIBRATION_DIST_MM = LINE_INTERVAL_MM * 3.0f;
-
-// キャリブレーション時の走行スピード
+const float LINE_INTERVAL_MM = 240.0f; 
+const float CALIBRATION_DIST_MM = LINE_INTERVAL_MM * 3.0f; // 1本目から4本目まで
 const float CALIB_SPEED_MM_S = 150.0f;
+const float REQUESTED_TURN_DEG = 540.0f; // トレッド幅測定用の旋回角度
 
-void main_task(intptr_t unused) {
-    // 1. ポート設定とインスタンス化
-    Motor left_motor(EV3_PORT_B, Direction::CLOCKWISE);
-    Motor right_motor(EV3_PORT_C, Direction::CLOCKWISE);
-    ColorSensor left_sensor(EV3_PORT_2);
-    ColorSensor right_sensor(EV3_PORT_3);
-
-    // ※ここは仮のタイヤ径（ここでは56.0mm）で初期化します。
-    // キャリブレーション走行自体には仮の径が使われますが、
-    // 最終的にエンコーダーの生値から正しい径を逆算するため問題ありません。
-    DriveBase drivebase(left_motor, right_motor, left_sensor, right_sensor, 56.0f, 120.0f);
+void run_calibration() {
+    auto& db = *::robot;
+    auto& l_mot = *::left_motor;
+    auto& r_mot = *::right_motor;
+    auto& l_sens = *::left_sensor;
+    auto& r_sens = *::right_sensor;
 
     ev3_lcd_set_font(EV3_FONT_MEDIUM);
     ev3_lcd_fill_rect(0, 0, EV3_LCD_WIDTH, EV3_LCD_HEIGHT, EV3_LCD_WHITE);
-    ev3_lcd_draw_string("CALIBRATION MODE", 0, 10);
+    ev3_lcd_draw_string("FULL CALIBRATION", 0, 10);
     ev3_lcd_draw_string("Press Enter...", 0, 40);
 
-    // Enterボタンが押されるまで待機
-    while (!ev3_button_is_pressed(ENTER_BUTTON)) {
-        tslp_tsk(10 * 1000);
-    }
-    tslp_tsk(500 * 1000); // チャタリング防止と走行開始前のタメ
-
-    ev3_lcd_fill_rect(0, 0, EV3_LCD_WIDTH, EV3_LCD_HEIGHT, EV3_LCD_WHITE);
-    ev3_lcd_draw_string("Finding Line 1...", 0, 10);
-
-    // ==========================================
-    // ステップ1: 1本目の線まで移動して起点を確定
-    // ==========================================
-    // 距離を 0.0f に指定し、線を見つけるまで走らせる
-    drivebase.straight_lines(1, 0.0f, CALIB_SPEED_MM_S, -1);
-    
-    // 完全に停止し、モーターのブレが収まるのを待つ
-    drivebase.brake();
+    while (!ev3_button_is_pressed(ENTER_BUTTON)) { tslp_tsk(10 * 1000); }
     tslp_tsk(500 * 1000); 
 
-    // 起点となるエンコーダーの生値（角度）を取得
-    int32_t start_l = left_motor.angle();
-    int32_t start_r = right_motor.angle();
+    // ==========================================
+    // 前半: タイヤ径 (wheel_diameter) の測定
+    // ==========================================
+    ev3_lcd_fill_rect(0, 0, EV3_LCD_WIDTH, EV3_LCD_HEIGHT, EV3_LCD_WHITE);
+    ev3_lcd_draw_string("1/4: Find Line 1", 0, 10);
+    db.straight_lines(1, 0.0f, CALIB_SPEED_MM_S, -1);
+    db.brake();
+    tslp_tsk(500 * 1000); 
 
-    // ==========================================
-    // ステップ2: 残り3本の線をまたぐ
-    // ==========================================
-    ev3_lcd_draw_string("Measuring 3 lines...", 0, 30);
-    drivebase.straight_lines(3, 0.0f, CALIB_SPEED_MM_S, -1);
-    
-    drivebase.brake();
+    int32_t start_l = l_mot.angle();
+    int32_t start_r = r_mot.angle();
+
+    ev3_lcd_draw_string("2/4: Measure Dia", 0, 35);
+    db.straight_lines(3, 0.0f, CALIB_SPEED_MM_S, -1);
+    db.brake();
     tslp_tsk(500 * 1000);
 
-    // 終点のエンコーダーの生値（角度）を取得
-    int32_t end_l = left_motor.angle();
-    int32_t end_r = right_motor.angle();
+    float avg_moved_deg = ((l_mot.angle() - start_l) + (r_mot.angle() - start_r)) / 2.0f;
+    float measured_diameter = (CALIBRATION_DIST_MM / (avg_moved_deg / 360.0f)) / M_PI;
 
     // ==========================================
-    // ステップ3: タイヤ径の計算
+    // 後半: トレッド幅 (axle_track) の測定
     // ==========================================
-    // 左右モーターの回転角の平均を算出
-    float moved_deg_l = (float)(end_l - start_l);
-    float moved_deg_r = (float)(end_r - start_r);
-    float avg_moved_deg = (moved_deg_l + moved_deg_r) / 2.0f;
+    // 100mm前進して旋回スペースを確保
+    ev3_lcd_draw_string("3/4: Turn 540", 0, 60);
+    db.straight(100.0f);
+    tslp_tsk(300 * 1000);
 
-    if (avg_moved_deg <= 0.0f) {
-        ev3_lcd_draw_string("ERROR: No rotation", 0, 70);
-        return;
+    // 540度旋回（現在の設定値に依存して回るため、ズレが生じる）
+    db.turn(REQUESTED_TURN_DEG);
+    tslp_tsk(500 * 1000);
+
+    ev3_lcd_draw_string("4/4: Check Track", 0, 85);
+
+    int crossed_lines = 0;
+    float measured_angle_error_deg = 0.0f;
+    float default_axle_track = pybricks::DriveConfig::axle_track; 
+    int threshold = pybricks::DriveConfig::target_val;
+
+    db.drive(CALIB_SPEED_MM_S, 0.0f);
+
+    while (crossed_lines < 2) {
+        bool l_on_black = false, r_on_black = false;
+        int32_t l_enter = 0, r_enter = 0;
+        int32_t l_exit = 0, r_exit = 0;
+
+        while(l_sens.reflection() < threshold + 10 && r_sens.reflection() < threshold + 10) {
+            tslp_tsk(10 * 1000);
+        }
+
+        while (true) {
+            int l_val = l_sens.reflection();
+            int r_val = r_sens.reflection();
+            int32_t cur_avg_deg = (l_mot.angle() + r_mot.angle()) / 2;
+
+            if (!l_on_black && l_val <= threshold) { l_on_black = true; l_enter = cur_avg_deg; }
+            if (!r_on_black && r_val <= threshold) { r_on_black = true; r_enter = cur_avg_deg; }
+
+            if (l_on_black && l_exit == 0 && l_val > threshold + 10) { l_exit = cur_avg_deg; }
+            if (r_on_black && r_exit == 0 && r_val > threshold + 10) { r_exit = cur_avg_deg; }
+
+            if (l_exit != 0 && r_exit != 0) break;
+            tslp_tsk(5 * 1000);
+        }
+
+        int32_t l_center = (l_enter + l_exit) / 2;
+        int32_t r_center = (r_enter + r_exit) / 2;
+        
+        // 修正箇所: 左が先に検知（l_centerが小さい）＝右向きに回りすぎ＝プラスのエラーとするため
+        // r_center - l_center で計算します。
+        int32_t center_diff = r_center - l_center; 
+        
+        float diff_mm = ((float)center_diff / 360.0f) * (measured_diameter * (float)M_PI);
+        
+        float ratio = diff_mm / default_axle_track;
+        if (ratio > 1.0f) ratio = 1.0f;
+        if (ratio < -1.0f) ratio = -1.0f;
+
+        float angle_rad = asinf(ratio);
+        measured_angle_error_deg = angle_rad * 180.0f / (float)M_PI;
+
+        crossed_lines++;
+        ev3_speaker_play_tone(1000, 50);
+        tslp_tsk(200 * 1000); 
     }
+    db.brake();
 
-    // 計算式:
-    // タイヤの円周(周長) = 走行距離 / (回転角度 / 360度)
-    // 直径 = 円周 / π
-    float rotations = avg_moved_deg / 360.0f;
-    float wheel_circumference = CALIBRATION_DIST_MM / rotations;
-    float measured_diameter = wheel_circumference / M_PI;
+    // ==========================================
+    // トレッド幅の逆算
+    // ==========================================
+    // 実際の旋回角度 = 540度 + ズレた角度
+    // （プラスエラーなら回りすぎた＝実際の旋回角度が540度以上だったということ）
+    float actual_turn_deg = REQUESTED_TURN_DEG + measured_angle_error_deg;
+    
+    // 正確なトレッド幅 = (指定角度 / 実際の角度) * 現在のトレッド幅設定値
+    // 回りすぎた場合、分母が大きくなるためトレッド幅の設定値は現在より小さく補正されます。
+    float measured_axle_track = default_axle_track * (REQUESTED_TURN_DEG / actual_turn_deg);
 
     // ==========================================
     // 結果の表示
     // ==========================================
-    char buf1[32], buf2[32], buf3[32];
-    snprintf(buf1, sizeof(buf1), "Deg: %.1f", avg_moved_deg);
-    snprintf(buf2, sizeof(buf2), "Dist: %.1f mm", CALIBRATION_DIST_MM);
-    snprintf(buf3, sizeof(buf3), "DIA: %.2f mm", measured_diameter);
+    char buf1[32], buf2[32], buf3[32], buf4[32];
+    snprintf(buf1, sizeof(buf1), "W_DIA : %.2f mm", measured_diameter);
+    snprintf(buf2, sizeof(buf2), "T_Err : %+.1f deg", measured_angle_error_deg);
+    snprintf(buf3, sizeof(buf3), "T_Act : %.1f deg", actual_turn_deg);
+    snprintf(buf4, sizeof(buf4), "TRACK : %.2f mm", measured_axle_track);
 
     ev3_lcd_fill_rect(0, 0, EV3_LCD_WIDTH, EV3_LCD_HEIGHT, EV3_LCD_WHITE);
-    ev3_lcd_draw_string("--- RESULT ---", 0, 10);
-    ev3_lcd_draw_string(buf1, 0, 35);
-    ev3_lcd_draw_string(buf2, 0, 60);
+    ev3_lcd_draw_string("--- RESULTS ---", 0, 0);
+    ev3_lcd_draw_string(buf1, 0, 20);
+    ev3_lcd_draw_string(buf2, 0, 45);
+    ev3_lcd_draw_string(buf3, 0, 70);
+    ev3_lcd_draw_string(buf4, 0, 95);
     
-    // 直径は目立つように少し下に表示
-    ev3_lcd_draw_string(buf3, 0, 95);
-    
-    // 完了のビープ音
-    ev3_speaker_play_tone(NOTE_C5, 200);
-    tslp_tsk(200 * 1000);
-    ev3_speaker_play_tone(NOTE_E5, 200);
-    tslp_tsk(200 * 1000);
+    ev3_speaker_play_tone(NOTE_C5, 200); tslp_tsk(200 * 1000);
+    ev3_speaker_play_tone(NOTE_E5, 200); tslp_tsk(200 * 1000);
     ev3_speaker_play_tone(NOTE_G5, 400);
 
-    // プログラムが終了しないように無限ループで待機
-    while (true) {
-        tslp_tsk(100 * 1000);
-    }
+    tslp_tsk(500 * 1000); 
+    while (!ev3_button_is_pressed(ENTER_BUTTON)) { tslp_tsk(10 * 1000); }
 }

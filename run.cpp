@@ -11,7 +11,14 @@ extern pybricks::Motor* right_motor;
 
 void run_main_course() {
     auto& robot = *::robot;
+    ev3_lcd_draw_string("Press Enter...", 0, 40);
 
+    // Enterボタンが押されるまで待機
+    while (!ev3_button_is_pressed(ENTER_BUTTON)) {
+        tslp_tsk(10 * 1000);
+    }
+    tslp_tsk(500 * 1000); // チャタリング防止と走行開始前のタメ
+    
     ev3_lcd_fill_rect(0, 0, EV3_LCD_WIDTH, EV3_LCD_HEIGHT, EV3_LCD_WHITE);
     ev3_lcd_draw_string("Main Course Start", 0, 0);
 
@@ -21,9 +28,16 @@ void run_main_course() {
     const float LINE_INTERVAL = 240.0;
     const float LINE_INTERVAL_START = 363.0;
 
-    robot.straight_lines(-3, LINE_INTERVAL * 2 + LINE_INTERVAL_START - 20);
-    // robot.straight(-1000);
+    // robot.straight_lines(-3, LINE_INTERVAL * 2 + LINE_INTERVAL_START - 20);
     // robot.straight_line(-LINE_INTERVAL_START);
 
     // ライントレースなどの処理を追加していく
+    // robot.straight_line(300);
+    robot.straight_line(315);
+    tslp_tsk(1000 * 50);
+    robot.straight(15);
+    tslp_tsk(1000 * 50);
+    robot.turn(90);
+    robot.straight_lines(4, LINE_INTERVAL_START + LINE_INTERVAL * 3 - 80);
 }
+

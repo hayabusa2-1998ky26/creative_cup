@@ -116,8 +116,9 @@ namespace pybricks {
         void turn(float angle_deg, Stop then = Stop::HOLD, bool wait = true);
         void drive(float speed_mm_per_sec, float turn_rate_deg_per_sec);
         
-        void straight_line(float distance_mm = 0.0f, float speed_mm_per_sec = -1.0f, int target_val = -1, bool skip_white_exit_check = false);
-        void straight_lines(int line_count, float distance_mm = 0.0f, float speed_mm_per_sec = -1.0f, int target_val = -1);
+        // ★変更: speed_mm_per_secの初期値を0.0fにし、reverse引数を追加
+        void straight_line(float distance_mm = 0.0f, float speed_mm_per_sec = 0.0f, int target_val = -1, bool skip_white_exit_check = false, bool reverse = false);
+        void straight_lines(int line_count, float distance_mm = 0.0f, float speed_mm_per_sec = 0.0f, int target_val = -1);
 
         void stop();
         void brake();

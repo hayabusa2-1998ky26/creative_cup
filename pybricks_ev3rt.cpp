@@ -115,8 +115,12 @@ namespace pybricks {
     // ==========================================
 
     DriveBase::DriveBase(Motor& left, Motor& right, ColorSensor& left_sens, ColorSensor& right_sens, float wheel_diam, float axle_track_dist)
-        : left_motor(&left), right_motor(&right), left_sensor(&left_sens), right_sensor(&right_sens), wheel_diameter(wheel_diam), axle_track(axle_track_dist) {
+        : left_motor(&left), right_motor(&right), left_sensor(&left_sens), right_sensor(&right_sens) {
         
+        // drive_config.h の設定値を優先して使用する
+        wheel_diameter = DriveConfig::wheel_diameter;
+        axle_track = DriveConfig::axle_track;
+
         control_period_ms = DriveConfig::period_ms;
         min_speed = DriveConfig::min_speed;
         decel_margin = DriveConfig::decel_margin;
@@ -142,12 +146,13 @@ namespace pybricks {
         prev_left_enc = 0;
         prev_right_enc = 0;
 
-        set_sensor_coordinates(axle_track_dist / 2.0f, 50.0f);
+        // 初期センサー位置設定
+        set_sensor_coordinates(axle_track / 2.0f, 50.0f);
     }
 
     void DriveBase::run_motors(float left_target, float right_target) {
         left_motor->run((int)left_target);
-        right_motor->run((int)(right_target * DriveConfig::motor_ff_ratio));
+        right_motor->run((int)right_target);
     }
 
     float DriveBase::calculate_sync_p(int32_t left_moved, int32_t right_moved, bool is_turn) {
@@ -411,9 +416,10 @@ namespace pybricks {
         else brake();
     }
 
-    void DriveBase::straight_line(float distance_mm, float speed_mm_per_sec, int target_val, bool skip_white_exit_check) {
+    void DriveBase::straight_line(float distance_mm, float speed_mm_per_sec, int target_val, bool skip_white_exit_check, bool reverse) {
         int target = (target_val < 0) ? config_target_val : target_val;
-        float run_speed_mm = (speed_mm_per_sec == 0.0f) ? default_straight_speed : fabsf(speed_mm_per_sec);
+        
+        float run_speed_mm = (speed_mm_per_sec == 0.0f) ? DriveConfig::straight_speed : fabsf(speed_mm_per_sec);
 
         float dt = control_period_ms / 1000.0f;
         ulong_t sleep_us = (ulong_t)(control_period_ms * 1000.0f);
@@ -430,11 +436,12 @@ namespace pybricks {
         if (distance_mm != 0.0f) {
             dir = (distance_mm > 0.0f) ? 1.0f : -1.0f;
         } else {
-            dir = (speed_mm_per_sec >= 0.0f) ? 1.0f : -1.0f;
+            // 明示的な引数で進行方向を決定
+            dir = reverse ? -1.0f : 1.0f;
         }
 
         float max_speed = (run_speed_mm / wheel_circ) * 360.0f; 
-        float accel = (default_straight_accel / wheel_circ) * 360.0f;
+        float accel = (DriveConfig::straight_accel / wheel_circ) * 360.0f;
 
         float current_speed = min_speed;
         bool pid_mode = false;
@@ -446,6 +453,10 @@ namespace pybricks {
         float l_prev_error = 0.0f;
         float r_prev_error = 0.0f;
 
+        // ローパスフィルタ用の変数を初期化
+        float filtered_l_val = (float)left_sensor->reflection();
+        float filtered_r_val = (float)right_sensor->reflection();
+
         bool waiting_for_white_exit = false;
         if (!skip_white_exit_check) {
             int init_l = left_sensor->reflection();
@@ -456,6 +467,10 @@ namespace pybricks {
         while (true) {
             int l_val = left_sensor->reflection();
             int r_val = right_sensor->reflection();
+
+            // ローパスフィルタの更新
+            filtered_l_val += DriveConfig::color_lpf_gain * (l_val - filtered_l_val);
+            filtered_r_val += DriveConfig::color_lpf_gain * (r_val - filtered_r_val);
 
             if (waiting_for_white_exit) {
                 if (l_val > target + 8 && r_val > target + 8) {
@@ -491,17 +506,18 @@ namespace pybricks {
                     if (current_speed > max_speed) current_speed = max_speed;
                 }
 
-                if (distance_mm != 0.0f && remaining_deg <= 0.0f) {
-                    break;
-                }
+                // 距離による強制停止(break)は削除済みのため、線を読むまで進み続けます
 
                 run_straight_sync(dir * current_speed, cur_left, cur_right);
 
-              } else {
-                float l_error = (float)(l_val - target);
-                float r_error = (float)(r_val - target);
+            } else {
+                float l_error = filtered_l_val - (float)target;
+                float r_error = filtered_r_val - (float)target;
 
-                if (abs(l_val - target) <= config_tolerance && abs(r_val - target) <= config_tolerance) {
+                // ★ 新しい終了条件: 左右の目標値との誤差の絶対値の合計
+                float total_error = fabsf(l_error) + fabsf(r_error);
+                
+                if (total_error <= config_tolerance) {
                     stable_count++;
                     if (stable_count >= target_stable_count) {
                         break;
@@ -526,10 +542,12 @@ namespace pybricks {
                 float l_output = (straight_kp * l_error) + (straight_ki * l_integral) + (straight_kd * l_derivative);
                 float r_output = (straight_kp * r_error) + (straight_ki * r_integral) + (straight_kd * r_derivative);
 
-                if (l_output > 120.0f) l_output = 120.0f;
-                if (l_output < -120.0f) l_output = -120.0f;
-                if (r_output > 120.0f) r_output = 120.0f;
-                if (r_output < -120.0f) r_output = -120.0f;
+                // アライメント時の最高速度を制限
+                float max_out = DriveConfig::align_max_power;
+                if (l_output > max_out) l_output = max_out;
+                if (l_output < -max_out) l_output = -max_out;
+                if (r_output > max_out) r_output = max_out;
+                if (r_output < -max_out) r_output = -max_out;
 
                 float align_dir = (dir >= 0.0f) ? 1.0f : -1.0f;
                 run_motors(align_dir * l_output, align_dir * r_output);
@@ -548,14 +566,18 @@ namespace pybricks {
         int target_lines = abs(line_count);
 
         int target = (target_val < 0) ? config_target_val : target_val;
-        float run_speed_mm = (speed_mm_per_sec <= 0.0f) ? default_straight_speed : speed_mm_per_sec;
+        
+        // ★変更: speed_mm_per_secが0以下の場合は DriveConfig から直接読み込む
+        float run_speed_mm = (speed_mm_per_sec <= 0.0f) ? DriveConfig::straight_speed : speed_mm_per_sec;
 
         float dt = control_period_ms / 1000.0f;
         ulong_t sleep_us = (ulong_t)(control_period_ms * 1000.0f);
 
         float wheel_circ = wheel_diameter * M_PI;
         float target_run_speed = (run_speed_mm / wheel_circ) * 360.0f;
-        float accel = (default_straight_accel / wheel_circ) * 360.0f;
+        
+        // ★変更: 加速度も DriveConfig から直接読み込む
+        float accel = (DriveConfig::straight_accel / wheel_circ) * 360.0f;
         
         float target_deg = fabsf((distance_mm / wheel_circ) * 360.0f);
 
@@ -636,9 +658,9 @@ namespace pybricks {
 
                     ev3_speaker_play_tone(1000, 50);
 
-                    // 最終ライン到達時
                     if (crossed_lines >= target_lines) {
-                        straight_line(0.0f, dir * run_speed_mm, target, true);
+                        bool is_reverse = (dir < 0.0f);
+                        straight_line(0.0f, run_speed_mm, target, true, is_reverse);
                         return;
                     }
 
@@ -676,13 +698,9 @@ namespace pybricks {
 
                         float sensor_width_total = 2.0f * sensor_x;
 
-                        // 前回の誤った dir の掛け算を撤回し、元の正しい計算式に戻します
-                        // 前進・後退に関わらず、エンコーダー差分と通過順序の逆転が相殺し合うため
-                        // この数式単体で常に正しい角度・符号が算出されます
                         float angle_error_rad = asinf(center_diff_mm / sensor_width_total);
                         pose_theta = angle_error_rad; 
                         
-                        // Y座標補正もセンサーの物理的な固定位置（sensor_y）に基づくため dir は不要です
                         pose_y = -sensor_y * sinf(pose_theta);
 
                         align_processing = false;

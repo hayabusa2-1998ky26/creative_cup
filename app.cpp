@@ -27,7 +27,7 @@ void main_task(intptr_t unused) {
 
     // 実行したいプログラム
     run_main_course();
-    // run_ff_calibration();
+    // run_calibration();
 
     ext_tsk();
 }
