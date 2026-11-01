@@ -21,6 +21,10 @@ const float CALIBRATION_DIST_MM = LINE_INTERVAL_MM * 3.0f - 10.0f; // 1本目か
 const float CALIB_SPEED_MM_S = 150.0f;
 const float REQUESTED_TURN_DEG = 540.0f; // トレッド幅測定用の旋回角度
 
+// ★追加: 角度のズレを計算するための、左右のカラーセンサー間の物理的な距離(mm)
+// ※ロボットの実測値に合わせて適宜変更してください。
+const float SENSOR_WIDTH_MM = 120.0f; 
+
 void run_calibration() {
     auto& db = *::robot;
     auto& l_mot = *::left_motor;
@@ -66,15 +70,23 @@ void run_calibration() {
     db.straight(100.0f);
     tslp_tsk(300 * 1000);
 
+    // ★旋回前のモーター角度を記録
+    int32_t turn_start_l = l_mot.angle();
+    int32_t turn_start_r = r_mot.angle();
+
     // 540度旋回（現在の設定値に依存して回るため、ズレが生じる）
     db.turn(REQUESTED_TURN_DEG);
     tslp_tsk(500 * 1000);
+
+    // ★旋回後のモーター角度を記録し、実際にタイヤが回転した角度を計算
+    int32_t turn_end_l = l_mot.angle();
+    int32_t turn_end_r = r_mot.angle();
+    float turn_wheel_deg = (fabsf((float)(turn_end_l - turn_start_l)) + fabsf((float)(turn_end_r - turn_start_r))) / 2.0f;
 
     ev3_lcd_draw_string("4/4: Check Track", 0, 85);
 
     int crossed_lines = 0;
     float measured_angle_error_deg = 0.0f;
-    float default_axle_track = pybricks::DriveConfig::axle_track; 
     int threshold = pybricks::DriveConfig::target_val;
 
     db.drive(CALIB_SPEED_MM_S, 0.0f);
@@ -106,13 +118,13 @@ void run_calibration() {
         int32_t l_center = (l_enter + l_exit) / 2;
         int32_t r_center = (r_enter + r_exit) / 2;
         
-        // 修正箇所: 左が先に検知（l_centerが小さい）＝右向きに回りすぎ＝プラスのエラーとするため
-        // r_center - l_center で計算します。
         int32_t center_diff = r_center - l_center; 
         
+        // 直前に算出したタイヤ径(measured_diameter)を利用
         float diff_mm = ((float)center_diff / 360.0f) * (measured_diameter * (float)M_PI);
         
-        float ratio = diff_mm / default_axle_track;
+        // ★以前の default_axle_track を廃止し、センサー間距離(SENSOR_WIDTH_MM)でズレ角を計算
+        float ratio = diff_mm / SENSOR_WIDTH_MM;
         if (ratio > 1.0f) ratio = 1.0f;
         if (ratio < -1.0f) ratio = -1.0f;
 
@@ -126,15 +138,14 @@ void run_calibration() {
     db.brake();
 
     // ==========================================
-    // トレッド幅の逆算
+    // トレッド幅の計算
     // ==========================================
     // 実際の旋回角度 = 540度 + ズレた角度
-    // （プラスエラーなら回りすぎた＝実際の旋回角度が540度以上だったということ）
     float actual_turn_deg = REQUESTED_TURN_DEG + measured_angle_error_deg;
     
-    // 正確なトレッド幅 = (指定角度 / 実際の角度) * 現在のトレッド幅設定値
-    // 回りすぎた場合、分母が大きくなるためトレッド幅の設定値は現在より小さく補正されます。
-    float measured_axle_track = default_axle_track * (REQUESTED_TURN_DEG / actual_turn_deg);
+    // ★以前の値を一切使わず、「直前のタイヤ径」と「モーターの回転角」からトレッド幅を逆算
+    // 式: トレッド幅 = タイヤ径 × (モーターの回転角 / 実際のロボット旋回角)
+    float measured_axle_track = measured_diameter * (turn_wheel_deg / actual_turn_deg);
 
     // ==========================================
     // 結果の表示
