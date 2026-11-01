@@ -41,7 +41,7 @@ void run_calibration() {
     // ==========================================
     ev3_lcd_fill_rect(0, 0, EV3_LCD_WIDTH, EV3_LCD_HEIGHT, EV3_LCD_WHITE);
     ev3_lcd_draw_string("1/4: Find Line 1", 0, 10);
-    db.straight_lines(1, 0.0f, CALIB_SPEED_MM_S, -1);
+    db.straight_lines(1, 0.0f, nullptr, 0.0f, CALIB_SPEED_MM_S, -1);
     db.brake();
     tslp_tsk(500 * 1000); 
 
@@ -49,7 +49,7 @@ void run_calibration() {
     int32_t start_r = r_mot.angle();
 
     ev3_lcd_draw_string("2/4: Measure Dia", 0, 35);
-    db.straight_lines(3, 0.0f, CALIB_SPEED_MM_S, -1);
+    db.straight_lines(3, 0.0f, nullptr, 0.0f, CALIB_SPEED_MM_S, -1);
     db.brake();
     tslp_tsk(500 * 1000);
 

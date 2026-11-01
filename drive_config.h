@@ -11,7 +11,7 @@ namespace pybricks {
         static constexpr float axle_track = 179.81f;
 
         // 制御周期 (ms) [例: 5.0f = 5ms (5,000us)]
-        static constexpr float period_ms = 1.5;
+        static constexpr float period_ms = 3;
 
         // 制御最小速度 (deg/s)
         static constexpr float min_speed = 50.0f;
@@ -28,7 +28,7 @@ namespace pybricks {
 
         // デフォルト旋回速度・加速度 (deg/s, deg/s^2)
         static constexpr float turn_rate = 300.0f;
-        static constexpr float turn_accel = 1000.0f;
+        static constexpr float turn_accel = 800.0f;
 
         // PIDアライメントゲイン (straight_line)
         static constexpr float straight_kp = 2.0f;
@@ -40,8 +40,8 @@ namespace pybricks {
         static constexpr float align_max_power = 1.0f;
 
         // アライメント許容閾値 & 目標反射光値
-        static constexpr int tolerance = 50;
-        static constexpr int target_val = 40;
+        static constexpr int tolerance = 30;
+        static constexpr int target_val = 25;
 
         // ローパスフィルタのゲイン (1.0でフィルタなし、0.1などで強く平滑化)
         static constexpr float color_lpf_gain = 0.8f;

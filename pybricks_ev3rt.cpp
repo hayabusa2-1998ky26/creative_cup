@@ -114,7 +114,7 @@ namespace pybricks {
     // DriveBase Class Implementation
     // ==========================================
 
-    DriveBase::DriveBase(Motor& left, Motor& right, ColorSensor& left_sens, ColorSensor& right_sens, float wheel_diam, float axle_track_dist)
+    DriveBase::DriveBase(Motor& left, Motor& right, ColorSensor& left_sens, ColorSensor& right_sens)
         : left_motor(&left), right_motor(&right), left_sensor(&left_sens), right_sensor(&right_sens) {
         
         // drive_config.h の設定値を優先して使用する
@@ -416,6 +416,115 @@ namespace pybricks {
         else brake();
     }
 
+    void DriveBase::wide_forward(float angle_deg, float radius_mm, Stop then, bool wait) {
+        float conf_axle_track = DriveConfig::axle_track;
+        float conf_wheel_diameter = DriveConfig::wheel_diameter;
+
+        // radius_mmが指定されていない(-1.0f)、または小さすぎる場合は片輪回転(ピボットターン)に制限
+        if (radius_mm < conf_axle_track / 2.0f) {
+            radius_mm = conf_axle_track / 2.0f;
+        }
+
+        if (fabsf(angle_deg) < 1.0f) return;
+
+        float dt = DriveConfig::period_ms / 1000.0f;
+        ulong_t sleep_us = (ulong_t)(DriveConfig::period_ms * 1000.0f);
+
+        // 旋回方向（正なら右旋回、負なら左旋回）
+        bool turn_right = (angle_deg >= 0.0f);
+        
+        // 左右の車輪が描く円弧の半径
+        float radius_l = turn_right ? (radius_mm + conf_axle_track / 2.0f) : (radius_mm - conf_axle_track / 2.0f);
+        float radius_r = turn_right ? (radius_mm - conf_axle_track / 2.0f) : (radius_mm + conf_axle_track / 2.0f);
+
+        // どちらの車輪が大きく動くか（外輪の半径を取得）
+        float max_radius = fmaxf(fabsf(radius_l), fabsf(radius_r));
+
+        // 左右車輪の移動量の比率 (外輪を 1.0 とし、内輪を 0.0〜1.0 の比率にする)
+        float ratio_l = radius_l / max_radius;
+        float ratio_r = radius_r / max_radius;
+
+        // 全体の移動の進捗を「外輪がどれだけ進むか」で管理する
+        float wheel_circ = conf_wheel_diameter * (float)M_PI;
+        float outer_circ = max_radius * 2.0f * (float)M_PI;
+        float outer_dist_mm = (fabsf(angle_deg) / 360.0f) * outer_circ;
+        float target_deg = (outer_dist_mm / wheel_circ) * 360.0f; // 外輪が回るべき総モーター角度
+
+        // ★修正点: 最高速度・加速度を turn 時の「車輪の速度」と完全に一致させる
+        // これにより、外輪がモーターの限界速度を超えて暴走するのを防ぎます
+        float max_speed = DriveConfig::turn_rate * (conf_axle_track / conf_wheel_diameter);
+        float accel = DriveConfig::turn_accel * (conf_axle_track / conf_wheel_diameter);
+
+        float current_speed = DriveConfig::min_speed;
+        
+        // 「外輪が現在どこまで進んでいるべきか」の理想的な角度（積分値）
+        float expected_outer_deg = 0.0f;
+
+        int32_t start_left = left_motor->angle();
+        int32_t start_right = right_motor->angle();
+
+        while (true) {
+            int32_t cur_left = left_motor->angle();
+            int32_t cur_right = right_motor->angle();
+
+            float left_moved = (float)(cur_left - start_left);
+            float right_moved = (float)(cur_right - start_right);
+
+            // 外輪の実際の進行度を計算（比率が大きい方の車輪の移動量を基準にする）
+            float actual_outer_moved;
+            if (ratio_l > ratio_r) {
+                actual_outer_moved = left_moved / ratio_l; // ratio_l は 1.0
+            } else {
+                actual_outer_moved = right_moved / ratio_r; // ratio_r は 1.0
+            }
+
+            float remaining_deg = target_deg - actual_outer_moved;
+            if (remaining_deg <= 0.0f) break;
+
+            // 減速距離の計算
+            float decel_dist = 0.0f;
+            if (current_speed > DriveConfig::min_speed) {
+                decel_dist = ((current_speed * current_speed - DriveConfig::min_speed * DriveConfig::min_speed) / (2.0f * accel)) * DriveConfig::decel_margin;
+            }
+
+            // 加減速プロファイルの更新
+            if (remaining_deg <= decel_dist) {
+                current_speed -= accel * dt;
+                if (current_speed < DriveConfig::min_speed) current_speed = DriveConfig::min_speed;
+            } else if (current_speed < max_speed) {
+                current_speed += accel * dt;
+                if (current_speed > max_speed) current_speed = max_speed;
+            }
+
+            // プロファイルに基づき「外輪の理想的な進行度合い」を積分
+            expected_outer_deg += current_speed * dt;
+            if (expected_outer_deg > target_deg) {
+                expected_outer_deg = target_deg;
+            }
+
+            // 左右モーターそれぞれの「現在あるべき理想の位置」
+            float expected_l = expected_outer_deg * ratio_l;
+            float expected_r = expected_outer_deg * ratio_r;
+
+            // 理想位置と現実のモーター位置とのズレ（エラー）
+            float err_l = expected_l - left_moved;
+            float err_r = expected_r - right_moved;
+
+            // P制御のゲインを少しマイルドに（ズレた分だけ速度を補正）
+            float Kp = 2.0f; 
+            
+            float left_target = (current_speed * ratio_l) + Kp * err_l;
+            float right_target = (current_speed * ratio_r) + Kp * err_r;
+
+            run_motors(left_target, right_target);
+
+            tslp_tsk(sleep_us);
+        }
+
+        if (then == Stop::COAST) stop();
+        else brake();
+    }
+
     void DriveBase::straight_line(float distance_mm, float speed_mm_per_sec, int target_val, bool skip_white_exit_check, bool reverse) {
         int target = (target_val < 0) ? config_target_val : target_val;
         
@@ -559,7 +668,7 @@ namespace pybricks {
         brake();
     }
 
-    void DriveBase::straight_lines(int line_count, float distance_mm, float speed_mm_per_sec, int target_val) {
+    void DriveBase::straight_lines(int line_count, float distance_mm, void (*func)(), float func_distance, float speed_mm_per_sec, int target_val) {
         if (line_count == 0) return;
 
         float dir = (line_count > 0) ? 1.0f : -1.0f;
@@ -567,7 +676,6 @@ namespace pybricks {
 
         int target = (target_val < 0) ? config_target_val : target_val;
         
-        // ★変更: speed_mm_per_secが0以下の場合は DriveConfig から直接読み込む
         float run_speed_mm = (speed_mm_per_sec <= 0.0f) ? DriveConfig::straight_speed : speed_mm_per_sec;
 
         float dt = control_period_ms / 1000.0f;
@@ -576,9 +684,7 @@ namespace pybricks {
         float wheel_circ = wheel_diameter * M_PI;
         float target_run_speed = (run_speed_mm / wheel_circ) * 360.0f;
         
-        // ★変更: 加速度も DriveConfig から直接読み込む
         float accel = (DriveConfig::straight_accel / wheel_circ) * 360.0f;
-        
         float target_deg = fabsf((distance_mm / wheel_circ) * 360.0f);
 
         int32_t start_left = left_motor->angle();
@@ -603,6 +709,10 @@ namespace pybricks {
         int init_l = left_sensor->reflection();
         int init_r = right_sensor->reflection();
         bool waiting_for_white_exit = (init_l <= target || init_r <= target);
+
+        // ★ コールバック実行用の変数
+        bool callback_pending = false;
+        int32_t callback_start_deg = 0;
 
         ev3_lcd_set_font(EV3_FONT_MEDIUM);
         ev3_lcd_fill_rect(0, 0, EV3_LCD_WIDTH, EV3_LCD_HEIGHT, EV3_LCD_WHITE);
@@ -662,6 +772,12 @@ namespace pybricks {
                         bool is_reverse = (dir < 0.0f);
                         straight_line(0.0f, run_speed_mm, target, true, is_reverse);
                         return;
+                    } else {
+                        // ★ 最後以外の線を検知した場合、コールバックを予約する
+                        if (func != nullptr) {
+                            callback_pending = true;
+                            callback_start_deg = cur_forward;
+                        }
                     }
 
                     align_processing = true;
@@ -708,6 +824,16 @@ namespace pybricks {
                         l_exit_deg = 0;
                         r_exit_deg = 0;
                     }
+                }
+            }
+
+            // ★ コールバックの距離チェックと実行
+            if (callback_pending) {
+                float moved_deg = fabsf((float)(cur_forward - callback_start_deg));
+                float target_callback_deg = (fabsf(func_distance) / wheel_circ) * 360.0f;
+                if (moved_deg >= target_callback_deg) {
+                    func();
+                    callback_pending = false; // 実行済みにする
                 }
             }
 

@@ -106,7 +106,7 @@ namespace pybricks {
         void run_straight_sync(float base_speed, int32_t cur_left, int32_t cur_right, float lookahead_dist = 80.0f);
 
     public:
-        DriveBase(Motor& left, Motor& right, ColorSensor& left_sens, ColorSensor& right_sens, float wheel_diameter_mm, float axle_track_mm);
+        DriveBase(Motor& left, Motor& right, ColorSensor& left_sens, ColorSensor& right_sens);
 
         // ★ 引数を変更
         void set_sensor_coordinates(float sensor_x_mm, float sensor_y_mm);
@@ -114,11 +114,13 @@ namespace pybricks {
         
         void straight(float distance_mm, Stop then = Stop::HOLD, bool wait = true);
         void turn(float angle_deg, Stop then = Stop::HOLD, bool wait = true);
+        void wide_forward(float angle_deg, float radius_mm = -1.0f, Stop then = Stop::HOLD, bool wait = true);
         void drive(float speed_mm_per_sec, float turn_rate_deg_per_sec);
         
         // ★変更: speed_mm_per_secの初期値を0.0fにし、reverse引数を追加
         void straight_line(float distance_mm = 0.0f, float speed_mm_per_sec = 0.0f, int target_val = -1, bool skip_white_exit_check = false, bool reverse = false);
-        void straight_lines(int line_count, float distance_mm = 0.0f, float speed_mm_per_sec = 0.0f, int target_val = -1);
+        // ★末尾に void (*func)() = nullptr, float func_distance = 0.0f を追加
+        void straight_lines(int line_count, float distance_mm = 0.0f, void (*func)() = nullptr, float func_distance = 0.0f, float speed_mm_per_sec = 0.0f, int target_val = -1);
 
         void stop();
         void brake();
