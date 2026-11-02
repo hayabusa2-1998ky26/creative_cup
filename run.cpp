@@ -13,6 +13,7 @@ extern pybricks::Motor* right_motor;
 sensor_port_t color_sensor_port = EV3_PORT_4;
 int rgbs[4][3];
 
+
 void color_reading() {
     ev3_speaker_play_tone(500, 50);
 
@@ -32,6 +33,18 @@ void color_reading() {
         break;
     }
 }
+
+
+int find(const char* target_list, const char target_element) {
+    for (int i = 0; i < 4; i++) {
+        if (target_list[i] == target_element) {
+            return i; 
+        }
+    }
+
+    return -1;
+}
+
 
 void run_main_course() {
     ev3_sensor_config(color_sensor_port, COLOR_SENSOR);
@@ -60,16 +73,19 @@ void run_main_course() {
 
     // ライントレースなどの処理を追加していく
     // robot.straight_line(300);
+    robot.straight_lines(-4, LINE_INTERVAL * 3 + LINE_INTERVAL_START);
+    tslp_tsk(1000000000);
+    //
     robot.straight_line(315);
     tslp_tsk(1000 * 50);
-    robot.straight(15);
+    robot.straight(18);
     tslp_tsk(1000 * 50);
     robot.turn(90);
     robot.straight_lines(4, LINE_INTERVAL_START + LINE_INTERVAL * 3 - 80, &color_reading, 128);
     robot.straight(128);
     tslp_tsk(1000*100);
     color_reading();
-    robot.wide_forward(180, 220 / 2);
+    robot.wide_forward(180, 213 / 2);
     robot.straight_lines(4, LINE_INTERVAL * 3 - 80 + 128);
 
     // // 画面表示用に文字列をフォーマット
@@ -117,9 +133,6 @@ void run_main_course() {
         }
     }
 
-
-
-
     // 画面表示用に文字列をフォーマット
     char buf_colors[4][32];
     char buf_gs[4][32];
@@ -138,7 +151,31 @@ void run_main_course() {
         ev3_lcd_draw_string(buf_gs[i], 50, 20 * (i + 1));
     }
 
-    // ループが早すぎるのを防ぐため、100ms（100,000μs）待機
     tslp_tsk(100 * 1000);
+
+    tslp_tsk(1000*1000*2);
+
+    char COLOR_ORDER[4] = {'g', 'b', 'y', 'r'};
+    int ago_pos = 0;
+    int goal_pos;
+
+    for (int i = 0; i < 3; i++) {
+        // オブジェクト入れる
+        
+
+        goal_pos = find(COLOR_ORDER, colors[ago_pos]);
+        robot.straight_lines(ago_pos - goal_pos, abs(ago_pos - goal_pos) * LINE_INTERVAL);
+        ago_pos = goal_pos;
+
+        tslp_tsk(1000*1000);
+    }
+
+    goal_pos = 3;
+    robot.straight_lines(ago_pos - goal_pos, abs(ago_pos - goal_pos) * LINE_INTERVAL);
+    robot.straight(-48 - LINE_INTERVAL_START);
+    tslp_tsk(1000*50);
+    robot.turn(-90);
+    tslp_tsk(1000*50);
+    robot.straight(100);
 }
 

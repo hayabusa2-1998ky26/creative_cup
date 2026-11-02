@@ -48,10 +48,17 @@ namespace pybricks {
     class ColorSensor {
     private:
         sensor_port_t port;
+        int min_val;
+        int max_val;
 
     public:
-        ColorSensor(sensor_port_t port);
+        ColorSensor(sensor_port_t port, int min_val = 0, int max_val = 100);
+        void set_calibration(int min_v, int max_v);
+
         int reflection();
+        // ★追加: 0.0f 〜 1.0f の範囲に正規化された反射光度を取得する関数
+        float normalized_reflection();
+
         int ambient();
         colorid_t color();
     };
@@ -68,9 +75,8 @@ namespace pybricks {
         float wheel_diameter; 
         float axle_track;     
 
-        // ★ 左右対称のため片側分だけで管理
-        float sensor_x; // 車体中心からセンサーまでの横幅の絶対値
-        float sensor_y; // 車軸からセンサーまでの前方距離
+        float sensor_x;
+        float sensor_y;
 
         float control_period_ms; 
         float min_speed;
@@ -84,17 +90,17 @@ namespace pybricks {
         float straight_kp;
         float straight_ki;
         float straight_kd;
-        int config_tolerance;
-        int config_target_val;
+        // ★変更: 浮動小数点(float)に変更
+        float config_tolerance;
+        float config_target_val;
 
         bool drive_sync_initialized;
         int32_t drive_start_left;
         int32_t drive_start_right;
 
-        // オドメトリ（自己位置推定）用変数
-        float pose_x;      // mm
-        float pose_y;      // mm
-        float pose_theta;  // rad
+        float pose_x;     
+        float pose_y;     
+        float pose_theta; 
         int32_t prev_left_enc;
         int32_t prev_right_enc;
 
@@ -108,7 +114,6 @@ namespace pybricks {
     public:
         DriveBase(Motor& left, Motor& right, ColorSensor& left_sens, ColorSensor& right_sens);
 
-        // ★ 引数を変更
         void set_sensor_coordinates(float sensor_x_mm, float sensor_y_mm);
         void settings(float straight_speed, float straight_acceleration = DriveConfig::straight_accel, float turn_rate = DriveConfig::turn_rate, float turn_acceleration = DriveConfig::turn_accel);
         
@@ -117,10 +122,9 @@ namespace pybricks {
         void wide_forward(float angle_deg, float radius_mm = -1.0f, Stop then = Stop::HOLD, bool wait = true);
         void drive(float speed_mm_per_sec, float turn_rate_deg_per_sec);
         
-        // ★変更: speed_mm_per_secの初期値を0.0fにし、reverse引数を追加
-        void straight_line(float distance_mm = 0.0f, float speed_mm_per_sec = 0.0f, int target_val = -1, bool skip_white_exit_check = false, bool reverse = false);
-        // ★末尾に void (*func)() = nullptr, float func_distance = 0.0f を追加
-        void straight_lines(int line_count, float distance_mm = 0.0f, void (*func)() = nullptr, float func_distance = 0.0f, float speed_mm_per_sec = 0.0f, int target_val = -1);
+        // ★変更: 第6引数 skip_initial_ignore を追加 (デフォルトは false)
+        void straight_line(float distance_mm = 0.0f, float speed_mm_per_sec = 0.0f, float target_val = -1.0f, bool skip_white_exit_check = false, bool reverse = false, bool skip_initial_ignore = false);
+        void straight_lines(int line_count, float distance_mm = 0.0f, void (*func)() = nullptr, float func_distance = 0.0f, float speed_mm_per_sec = 0.0f, float target_val = -1.0f);
 
         void stop();
         void brake();

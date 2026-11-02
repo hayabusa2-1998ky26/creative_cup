@@ -4,7 +4,7 @@
 #include "programs.h"
 
 // =========================================================
-// グローバルポインタの宣言（ここではまだハードウェア通信しない）
+// グローバルポインタの宣言
 // =========================================================
 pybricks::Motor* left_motor;
 pybricks::Motor* right_motor;
@@ -16,18 +16,18 @@ pybricks::DriveBase* robot;
 // メインタスク
 // =========================================================
 void main_task(intptr_t unused) {
-    // OSが起動したここで初めて実体を生成する（ハードウェア通信が正常に行われる）
     left_motor   = new pybricks::Motor(EV3_PORT_B, pybricks::Direction::COUNTERCLOCKWISE);
     right_motor  = new pybricks::Motor(EV3_PORT_C, pybricks::Direction::CLOCKWISE);
-    left_sensor  = new pybricks::ColorSensor(EV3_PORT_2);
-    right_sensor = new pybricks::ColorSensor(EV3_PORT_3);
 
-    // タイヤ径と車輪間隔を設定
+    // ★変更: キャリブレーション設定値を渡してインスタンス生成
+    left_sensor  = new pybricks::ColorSensor(EV3_PORT_2, pybricks::DriveConfig::left_sensor_min, pybricks::DriveConfig::left_sensor_max);
+    right_sensor = new pybricks::ColorSensor(EV3_PORT_3, pybricks::DriveConfig::right_sensor_min, pybricks::DriveConfig::right_sensor_max);
+
     robot = new pybricks::DriveBase(*left_motor, *right_motor, *left_sensor, *right_sensor);
 
-    // 実行したいプログラム
     run_main_course();
     // run_calibration();
+    run_color_calibration();
 
     ext_tsk();
 }

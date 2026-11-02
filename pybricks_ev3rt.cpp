@@ -92,13 +92,29 @@ namespace pybricks {
     // ColorSensor Class Implementation
     // ==========================================
 
-    ColorSensor::ColorSensor(sensor_port_t p) : port(p) {
+    ColorSensor::ColorSensor(sensor_port_t p, int min_v, int max_v) 
+        : port(p), min_val(min_v), max_val(max_v) {
         ev3_sensor_config(port, COLOR_SENSOR);
         tslp_tsk(500 * 1000); 
     }
 
+    void ColorSensor::set_calibration(int min_v, int max_v) {
+        min_val = min_v;
+        max_val = max_v;
+    }
+
     int ColorSensor::reflection() { 
         return ev3_color_sensor_get_reflect(port); 
+    }
+
+    float ColorSensor::normalized_reflection() {
+        int raw = reflection();
+        if (max_val == min_val) return 0.0f;
+        
+        float norm = (float)(raw - min_val) / (float)(max_val - min_val);
+        if (norm < 0.0f) norm = 0.0f;
+        if (norm > 1.0f) norm = 1.0f;
+        return norm;
     }
     
     int ColorSensor::ambient() { 
@@ -117,7 +133,6 @@ namespace pybricks {
     DriveBase::DriveBase(Motor& left, Motor& right, ColorSensor& left_sens, ColorSensor& right_sens)
         : left_motor(&left), right_motor(&right), left_sensor(&left_sens), right_sensor(&right_sens) {
         
-        // drive_config.h の設定値を優先して使用する
         wheel_diameter = DriveConfig::wheel_diameter;
         axle_track = DriveConfig::axle_track;
 
@@ -146,7 +161,6 @@ namespace pybricks {
         prev_left_enc = 0;
         prev_right_enc = 0;
 
-        // 初期センサー位置設定
         set_sensor_coordinates(axle_track / 2.0f, 50.0f);
     }
 
@@ -420,7 +434,6 @@ namespace pybricks {
         float conf_axle_track = DriveConfig::axle_track;
         float conf_wheel_diameter = DriveConfig::wheel_diameter;
 
-        // radius_mmが指定されていない(-1.0f)、または小さすぎる場合は片輪回転(ピボットターン)に制限
         if (radius_mm < conf_axle_track / 2.0f) {
             radius_mm = conf_axle_track / 2.0f;
         }
@@ -430,34 +443,25 @@ namespace pybricks {
         float dt = DriveConfig::period_ms / 1000.0f;
         ulong_t sleep_us = (ulong_t)(DriveConfig::period_ms * 1000.0f);
 
-        // 旋回方向（正なら右旋回、負なら左旋回）
         bool turn_right = (angle_deg >= 0.0f);
         
-        // 左右の車輪が描く円弧の半径
         float radius_l = turn_right ? (radius_mm + conf_axle_track / 2.0f) : (radius_mm - conf_axle_track / 2.0f);
         float radius_r = turn_right ? (radius_mm - conf_axle_track / 2.0f) : (radius_mm + conf_axle_track / 2.0f);
 
-        // どちらの車輪が大きく動くか（外輪の半径を取得）
         float max_radius = fmaxf(fabsf(radius_l), fabsf(radius_r));
 
-        // 左右車輪の移動量の比率 (外輪を 1.0 とし、内輪を 0.0〜1.0 の比率にする)
         float ratio_l = radius_l / max_radius;
         float ratio_r = radius_r / max_radius;
 
-        // 全体の移動の進捗を「外輪がどれだけ進むか」で管理する
         float wheel_circ = conf_wheel_diameter * (float)M_PI;
         float outer_circ = max_radius * 2.0f * (float)M_PI;
         float outer_dist_mm = (fabsf(angle_deg) / 360.0f) * outer_circ;
-        float target_deg = (outer_dist_mm / wheel_circ) * 360.0f; // 外輪が回るべき総モーター角度
+        float target_deg = (outer_dist_mm / wheel_circ) * 360.0f; 
 
-        // ★修正点: 最高速度・加速度を turn 時の「車輪の速度」と完全に一致させる
-        // これにより、外輪がモーターの限界速度を超えて暴走するのを防ぎます
         float max_speed = DriveConfig::turn_rate * (conf_axle_track / conf_wheel_diameter);
         float accel = DriveConfig::turn_accel * (conf_axle_track / conf_wheel_diameter);
 
         float current_speed = DriveConfig::min_speed;
-        
-        // 「外輪が現在どこまで進んでいるべきか」の理想的な角度（積分値）
         float expected_outer_deg = 0.0f;
 
         int32_t start_left = left_motor->angle();
@@ -470,24 +474,21 @@ namespace pybricks {
             float left_moved = (float)(cur_left - start_left);
             float right_moved = (float)(cur_right - start_right);
 
-            // 外輪の実際の進行度を計算（比率が大きい方の車輪の移動量を基準にする）
             float actual_outer_moved;
             if (ratio_l > ratio_r) {
-                actual_outer_moved = left_moved / ratio_l; // ratio_l は 1.0
+                actual_outer_moved = left_moved / ratio_l; 
             } else {
-                actual_outer_moved = right_moved / ratio_r; // ratio_r は 1.0
+                actual_outer_moved = right_moved / ratio_r; 
             }
 
             float remaining_deg = target_deg - actual_outer_moved;
             if (remaining_deg <= 0.0f) break;
 
-            // 減速距離の計算
             float decel_dist = 0.0f;
             if (current_speed > DriveConfig::min_speed) {
                 decel_dist = ((current_speed * current_speed - DriveConfig::min_speed * DriveConfig::min_speed) / (2.0f * accel)) * DriveConfig::decel_margin;
             }
 
-            // 加減速プロファイルの更新
             if (remaining_deg <= decel_dist) {
                 current_speed -= accel * dt;
                 if (current_speed < DriveConfig::min_speed) current_speed = DriveConfig::min_speed;
@@ -496,21 +497,17 @@ namespace pybricks {
                 if (current_speed > max_speed) current_speed = max_speed;
             }
 
-            // プロファイルに基づき「外輪の理想的な進行度合い」を積分
             expected_outer_deg += current_speed * dt;
             if (expected_outer_deg > target_deg) {
                 expected_outer_deg = target_deg;
             }
 
-            // 左右モーターそれぞれの「現在あるべき理想の位置」
             float expected_l = expected_outer_deg * ratio_l;
             float expected_r = expected_outer_deg * ratio_r;
 
-            // 理想位置と現実のモーター位置とのズレ（エラー）
             float err_l = expected_l - left_moved;
             float err_r = expected_r - right_moved;
 
-            // P制御のゲインを少しマイルドに（ズレた分だけ速度を補正）
             float Kp = 2.0f; 
             
             float left_target = (current_speed * ratio_l) + Kp * err_l;
@@ -525,8 +522,9 @@ namespace pybricks {
         else brake();
     }
 
-    void DriveBase::straight_line(float distance_mm, float speed_mm_per_sec, int target_val, bool skip_white_exit_check, bool reverse) {
-        int target = (target_val < 0) ? config_target_val : target_val;
+    // ★変更: 引数 skip_initial_ignore を追加
+    void DriveBase::straight_line(float distance_mm, float speed_mm_per_sec, float target_val, bool skip_white_exit_check, bool reverse, bool skip_initial_ignore) {
+        float target = (target_val < 0.0f) ? config_target_val : target_val;
         
         float run_speed_mm = (speed_mm_per_sec == 0.0f) ? DriveConfig::straight_speed : fabsf(speed_mm_per_sec);
 
@@ -545,7 +543,6 @@ namespace pybricks {
         if (distance_mm != 0.0f) {
             dir = (distance_mm > 0.0f) ? 1.0f : -1.0f;
         } else {
-            // 明示的な引数で進行方向を決定
             dir = reverse ? -1.0f : 1.0f;
         }
 
@@ -562,45 +559,53 @@ namespace pybricks {
         float l_prev_error = 0.0f;
         float r_prev_error = 0.0f;
 
-        // ローパスフィルタ用の変数を初期化
-        float filtered_l_val = (float)left_sensor->reflection();
-        float filtered_r_val = (float)right_sensor->reflection();
+        float filtered_l_val = left_sensor->normalized_reflection();
+        float filtered_r_val = right_sensor->normalized_reflection();
 
         bool waiting_for_white_exit = false;
-        if (!skip_white_exit_check) {
-            int init_l = left_sensor->reflection();
-            int init_r = right_sensor->reflection();
-            waiting_for_white_exit = (init_l <= target + 10 || init_r <= target + 10);
-        }
+        bool white_exit_initialized = false;
+
+        // ★ skip_initial_ignore が true の場合は無視距離を 0mm に設定
+        float ignore_dist = skip_initial_ignore ? 0.0f : DriveConfig::initial_ignore_dist;
 
         while (true) {
-            int l_val = left_sensor->reflection();
-            int r_val = right_sensor->reflection();
+            int32_t cur_left = left_motor->angle();
+            int32_t cur_right = right_motor->angle();
 
-            // ローパスフィルタの更新
+            int32_t left_moved = cur_left - start_left;
+            int32_t right_moved = cur_right - start_right;
+            float avg_moved_deg = (fabsf((float)left_moved) + fabsf((float)right_moved)) / 2.0f;
+            float moved_mm = (avg_moved_deg / 360.0f) * wheel_circ;
+
+            float l_val = left_sensor->normalized_reflection();
+            float r_val = right_sensor->normalized_reflection();
+
             filtered_l_val += DriveConfig::color_lpf_gain * (l_val - filtered_l_val);
             filtered_r_val += DriveConfig::color_lpf_gain * (r_val - filtered_r_val);
 
-            if (waiting_for_white_exit) {
-                if (l_val > target + 8 && r_val > target + 8) {
-                    waiting_for_white_exit = false;
+            // ★ ignore_dist (0mm または 20mm) 以上進んだら有効化
+            if (moved_mm >= ignore_dist) {
+                if (!white_exit_initialized) {
+                    if (!skip_white_exit_check) {
+                        waiting_for_white_exit = (l_val <= target + 0.2f || r_val <= target + 0.2f);
+                    }
+                    white_exit_initialized = true;
                 }
-            } else {
-                if (!pid_mode && (l_val <= target + 10 || r_val <= target + 10)) {
-                    ev3_speaker_play_tone(1000, 50);
-                    pid_mode = true;
+
+                if (waiting_for_white_exit) {
+                    if (l_val > target + 0.16f && r_val > target + 0.16f) {
+                        waiting_for_white_exit = false;
+                    }
+                } else {
+                    if (!pid_mode && (l_val <= target + 0.2f || r_val <= target + 0.2f)) {
+                        ev3_speaker_play_tone(1000, 50);
+                        pid_mode = true;
+                    }
                 }
             }
 
             if (!pid_mode) {
-                int32_t cur_left = left_motor->angle();
-                int32_t cur_right = right_motor->angle();
-
-                int32_t left_moved = cur_left - start_left;
-                int32_t right_moved = cur_right - start_right;
-                float avg_moved = (fabsf((float)left_moved) + fabsf((float)right_moved)) / 2.0f;
-
-                float remaining_deg = target_deg - avg_moved;
+                float remaining_deg = target_deg - avg_moved_deg;
 
                 float decel_dist = 0.0f;
                 if (current_speed > min_speed) {
@@ -615,15 +620,12 @@ namespace pybricks {
                     if (current_speed > max_speed) current_speed = max_speed;
                 }
 
-                // 距離による強制停止(break)は削除済みのため、線を読むまで進み続けます
-
                 run_straight_sync(dir * current_speed, cur_left, cur_right);
 
             } else {
-                float l_error = filtered_l_val - (float)target;
-                float r_error = filtered_r_val - (float)target;
+                float l_error = filtered_l_val - target;
+                float r_error = filtered_r_val - target;
 
-                // ★ 新しい終了条件: 左右の目標値との誤差の絶対値の合計
                 float total_error = fabsf(l_error) + fabsf(r_error);
                 
                 if (total_error <= config_tolerance) {
@@ -651,7 +653,6 @@ namespace pybricks {
                 float l_output = (straight_kp * l_error) + (straight_ki * l_integral) + (straight_kd * l_derivative);
                 float r_output = (straight_kp * r_error) + (straight_ki * r_integral) + (straight_kd * r_derivative);
 
-                // アライメント時の最高速度を制限
                 float max_out = DriveConfig::align_max_power;
                 if (l_output > max_out) l_output = max_out;
                 if (l_output < -max_out) l_output = -max_out;
@@ -668,13 +669,13 @@ namespace pybricks {
         brake();
     }
 
-    void DriveBase::straight_lines(int line_count, float distance_mm, void (*func)(), float func_distance, float speed_mm_per_sec, int target_val) {
+    void DriveBase::straight_lines(int line_count, float distance_mm, void (*func)(), float func_distance, float speed_mm_per_sec, float target_val) {
         if (line_count == 0) return;
 
         float dir = (line_count > 0) ? 1.0f : -1.0f;
         int target_lines = abs(line_count);
 
-        int target = (target_val < 0) ? config_target_val : target_val;
+        float target = (target_val < 0.0f) ? config_target_val : target_val;
         
         float run_speed_mm = (speed_mm_per_sec <= 0.0f) ? DriveConfig::straight_speed : speed_mm_per_sec;
 
@@ -706,11 +707,10 @@ namespace pybricks {
         int32_t last_line_detected_l = start_left;
         int32_t last_line_detected_r = start_right;
 
-        int init_l = left_sensor->reflection();
-        int init_r = right_sensor->reflection();
-        bool waiting_for_white_exit = (init_l <= target || init_r <= target);
+        // ★ 白抜け判定の初期化を20mm走順まで保留
+        bool waiting_for_white_exit = false;
+        bool white_exit_initialized = false;
 
-        // ★ コールバック実行用の変数
         bool callback_pending = false;
         int32_t callback_start_deg = 0;
 
@@ -726,6 +726,7 @@ namespace pybricks {
             int32_t total_left_moved = cur_left_total - start_left;
             int32_t total_right_moved = cur_right_total - start_right;
             float total_avg_moved = (fabsf((float)total_left_moved) + fabsf((float)total_right_moved)) / 2.0f;
+            float total_moved_mm = (total_avg_moved / 360.0f) * wheel_circ;
             float remaining_deg = target_deg - total_avg_moved;
 
             float decel_dist = 0.0f;
@@ -741,99 +742,107 @@ namespace pybricks {
                 if (current_speed > target_run_speed) current_speed = target_run_speed;
             }
 
-            int l_val = left_sensor->reflection();
-            int r_val = right_sensor->reflection();
+            float l_val = left_sensor->normalized_reflection();
+            float r_val = right_sensor->normalized_reflection();
             bool l_on_black = (l_val <= target);
             bool r_on_black = (r_val <= target);
 
-            if (waiting_for_white_exit) {
-                if (l_val > target + 8 && r_val > target + 8) {
-                    waiting_for_white_exit = false;
-                    has_detected_any_line = true;
-                    last_line_detected_l = cur_left_total;
-                    last_line_detected_r = cur_right_total;
+            // ★ メソッド開始から 20mm 以上進んでから各種検知処理を有効化
+            if (total_moved_mm >= DriveConfig::initial_ignore_dist) {
+                if (!white_exit_initialized) {
+                    waiting_for_white_exit = (l_on_black || r_on_black);
+                    white_exit_initialized = true;
                 }
-            } else {
-                float moved_from_last_line_deg = (fabsf((float)(cur_left_total - last_line_detected_l)) + 
-                                                  fabsf((float)(cur_right_total - last_line_detected_r))) / 2.0f;
-                float moved_from_last_line_mm = (moved_from_last_line_deg / 360.0f) * wheel_circ;
-                bool blind_ok = !has_detected_any_line || (moved_from_last_line_mm >= line_blind_dist);
 
-                if (!in_line_zone && blind_ok && (l_on_black || r_on_black)) {
-                    in_line_zone = true;
-                    crossed_lines++;
-                    has_detected_any_line = true;
-                    last_line_detected_l = cur_left_total;
-                    last_line_detected_r = cur_right_total;
+                if (waiting_for_white_exit) {
+                    if (l_val > target + 0.16f && r_val > target + 0.16f) {
+                        waiting_for_white_exit = false;
+                        has_detected_any_line = true;
+                        last_line_detected_l = cur_left_total;
+                        last_line_detected_r = cur_right_total;
+                    }
+                } else {
+                    float moved_from_last_line_deg = (fabsf((float)(cur_left_total - last_line_detected_l)) + 
+                                                      fabsf((float)(cur_right_total - last_line_detected_r))) / 2.0f;
+                    float moved_from_last_line_mm = (moved_from_last_line_deg / 360.0f) * wheel_circ;
+                    bool blind_ok = !has_detected_any_line || (moved_from_last_line_mm >= line_blind_dist);
 
-                    ev3_speaker_play_tone(1000, 50);
+                    if (!in_line_zone && blind_ok && (l_on_black || r_on_black)) {
+                        in_line_zone = true;
+                        crossed_lines++;
+                        has_detected_any_line = true;
+                        last_line_detected_l = cur_left_total;
+                        last_line_detected_r = cur_right_total;
 
-                    if (crossed_lines >= target_lines) {
-                        bool is_reverse = (dir < 0.0f);
-                        straight_line(0.0f, run_speed_mm, target, true, is_reverse);
-                        return;
-                    } else {
-                        // ★ 最後以外の線を検知した場合、コールバックを予約する
-                        if (func != nullptr) {
-                            callback_pending = true;
-                            callback_start_deg = cur_forward;
+                        ev3_speaker_play_tone(1000, 50);
+
+                        // DriveBase::straight_lines の最終線到達時の処理
+                        if (crossed_lines >= target_lines) {
+                            bool is_reverse = (dir < 0.0f);
+                            // ★ 第6引数 (skip_initial_ignore) に true を指定して呼び出す
+                            straight_line(0.0f, run_speed_mm, target, true, is_reverse, true);
+                            return;
+                        } else {
+                            if (func != nullptr) {
+                                callback_pending = true;
+                                callback_start_deg = cur_forward;
+                            }
                         }
-                    }
 
-                    align_processing = true;
-                    l_in_line = l_on_black;
-                    r_in_line = r_on_black;
-                    l_enter_deg = l_on_black ? cur_forward : 0;
-                    r_enter_deg = r_on_black ? cur_forward : 0;
-                    l_exit_deg = 0;
-                    r_exit_deg = 0;
-                }
-                else if (in_line_zone && align_processing) {
-                    if (l_on_black && !l_in_line) {
-                        l_in_line = true;
-                        l_enter_deg = cur_forward;
-                    } else if (!l_on_black && l_in_line) {
-                        l_in_line = false;
-                        l_exit_deg = cur_forward;
-                    }
-
-                    if (r_on_black && !r_in_line) {
-                        r_in_line = true;
-                        r_enter_deg = cur_forward;
-                    } else if (!r_on_black && r_in_line) {
-                        r_in_line = false;
-                        r_exit_deg = cur_forward;
-                    }
-
-                    if (!l_on_black && !r_on_black && l_exit_deg != 0 && r_exit_deg != 0) {
-                        int32_t l_center = (l_enter_deg + l_exit_deg) / 2;
-                        int32_t r_center = (r_enter_deg + r_exit_deg) / 2;
-
-                        int32_t center_diff = l_center - r_center;
-                        float center_diff_mm = ((float)center_diff / 360.0f) * (wheel_diameter * (float)M_PI);
-
-                        float sensor_width_total = 2.0f * sensor_x;
-
-                        float angle_error_rad = asinf(center_diff_mm / sensor_width_total);
-                        pose_theta = angle_error_rad; 
-                        
-                        pose_y = -sensor_y * sinf(pose_theta);
-
-                        align_processing = false;
-                        in_line_zone = false;
+                        align_processing = true;
+                        l_in_line = l_on_black;
+                        r_in_line = r_on_black;
+                        l_enter_deg = l_on_black ? cur_forward : 0;
+                        r_enter_deg = r_on_black ? cur_forward : 0;
                         l_exit_deg = 0;
                         r_exit_deg = 0;
+                    }
+                    else if (in_line_zone && align_processing) {
+                        if (l_on_black && !l_in_line) {
+                            l_in_line = true;
+                            l_enter_deg = cur_forward;
+                        } else if (!l_on_black && l_in_line) {
+                            l_in_line = false;
+                            l_exit_deg = cur_forward;
+                        }
+
+                        if (r_on_black && !r_in_line) {
+                            r_in_line = true;
+                            r_enter_deg = cur_forward;
+                        } else if (!r_on_black && r_in_line) {
+                            r_in_line = false;
+                            r_exit_deg = cur_forward;
+                        }
+
+                        if (!l_on_black && !r_on_black && l_exit_deg != 0 && r_exit_deg != 0) {
+                            int32_t l_center = (l_enter_deg + l_exit_deg) / 2;
+                            int32_t r_center = (r_enter_deg + r_exit_deg) / 2;
+
+                            int32_t center_diff = l_center - r_center;
+                            float center_diff_mm = ((float)center_diff / 360.0f) * (wheel_diameter * (float)M_PI);
+
+                            float sensor_width_total = 2.0f * sensor_x;
+
+                            float angle_error_rad = asinf(center_diff_mm / sensor_width_total);
+                            pose_theta = angle_error_rad; 
+                            
+                            pose_y = -sensor_y * sinf(pose_theta);
+
+                            align_processing = false;
+                            in_line_zone = false;
+                            l_exit_deg = 0;
+                            r_exit_deg = 0;
+                        }
                     }
                 }
             }
 
-            // ★ コールバックの距離チェックと実行
             if (callback_pending) {
                 float moved_deg = fabsf((float)(cur_forward - callback_start_deg));
                 float target_callback_deg = (fabsf(func_distance) / wheel_circ) * 360.0f;
                 if (moved_deg >= target_callback_deg) {
                     func();
-                    callback_pending = false; // 実行済みにする
+                    callback_pending = false;
                 }
             }
 

@@ -7,4 +7,6 @@ void run_main_course();
 
 void run_calibration();
 
+void run_color_calibration();
+
 #endif // PROGRAMS_H
