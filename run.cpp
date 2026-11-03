@@ -1,6 +1,8 @@
 #include "ev3api.h"
 #include "pybricks_ev3rt.h"
 #include "programs.h"
+#include "motion_sequence.h"
+#include "motor_control.h"
 #include <algorithm>
 
 // すべてポインタ（*）に変更します
@@ -72,20 +74,25 @@ void run_main_course() {
     // robot.straight_line(-LINE_INTERVAL_START);
 
     // ライントレースなどの処理を追加していく
-    // robot.straight_line(300);
-    robot.straight_lines(-4, LINE_INTERVAL * 3 + LINE_INTERVAL_START);
-    tslp_tsk(1000000000);
+    
+    // catch_motor(180, 100);
+    // catch_block();
+    // tslp_tsk(1000*3000);
+    // catch_block();
+    // tslp_tsk(1000*3000);
+    // catch_block();
+    // tslp_tsk(1000000000);
     //
-    robot.straight_line(315);
+    robot.straight_line(330);
     tslp_tsk(1000 * 50);
-    robot.straight(18);
+    robot.straight(10);
     tslp_tsk(1000 * 50);
     robot.turn(90);
-    robot.straight_lines(4, LINE_INTERVAL_START + LINE_INTERVAL * 3 - 80, &color_reading, 128);
+    robot.straight_lines(4, LINE_INTERVAL_START + LINE_INTERVAL * 3 - 80 + 40, &color_reading, 128); // 40は微調整値
     robot.straight(128);
     tslp_tsk(1000*100);
     color_reading();
-    robot.wide_forward(180, 213 / 2);
+    robot.wide_forward(180, 217 / 2);
     robot.straight_lines(4, LINE_INTERVAL * 3 - 80 + 128);
 
     // // 画面表示用に文字列をフォーマット
@@ -152,30 +159,41 @@ void run_main_course() {
     }
 
     tslp_tsk(100 * 1000);
-
-    tslp_tsk(1000*1000*2);
+    // tslp_tsk(1000*1000*10);
 
     char COLOR_ORDER[4] = {'g', 'b', 'y', 'r'};
     int ago_pos = 0;
     int goal_pos;
 
+    catch_motor(200, 100);
+
     for (int i = 0; i < 3; i++) {
         // オブジェクト入れる
-        
+        catch_block();
+        act_tsk(ARM_TASK);
 
         goal_pos = find(COLOR_ORDER, colors[ago_pos]);
         robot.straight_lines(ago_pos - goal_pos, abs(ago_pos - goal_pos) * LINE_INTERVAL);
+        
+        if (ago_pos < goal_pos) {
+            robot.straight(-15);
+            tslp_tsk(1000*300);
+        }
         ago_pos = goal_pos;
-
-        tslp_tsk(1000*1000);
     }
+
+    catch_block();
+    act_tsk(ARM_TASK);
 
     goal_pos = 3;
     robot.straight_lines(ago_pos - goal_pos, abs(ago_pos - goal_pos) * LINE_INTERVAL);
-    robot.straight(-48 - LINE_INTERVAL_START);
+
+    catch_motor(-200, 100);
+
+    robot.straight(48 - LINE_INTERVAL_START);
     tslp_tsk(1000*50);
     robot.turn(-90);
     tslp_tsk(1000*50);
-    robot.straight(100);
+    robot.straight(200);
 }
 

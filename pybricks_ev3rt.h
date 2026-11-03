@@ -30,11 +30,15 @@ namespace pybricks {
         Motor(motor_port_t port, Direction positive_direction = Direction::CLOCKWISE);
         
         void run(int speed_deg_per_sec);
+        void dc(float power_percent);
         void stop();
         void brake();
         void hold();
         
         void run_angle(int speed_deg_per_sec, int angle_deg, Stop then = Stop::HOLD, bool wait = true);
+
+        // Run at signed power (%) until stalled or a five-second timeout.
+        bool run_until_stalled(int power);
 
         int32_t angle();
         void reset_angle(int32_t angle_val = 0);
@@ -101,6 +105,8 @@ namespace pybricks {
         float pose_x;     
         float pose_y;     
         float pose_theta; 
+        float heading_prev_error;
+        bool heading_pd_initialized;
         int32_t prev_left_enc;
         int32_t prev_right_enc;
 
@@ -108,8 +114,8 @@ namespace pybricks {
         float calculate_sync_p(int32_t left_moved, int32_t right_moved, bool is_turn = false);
         void reset_odometry();
         void update_odometry(int32_t cur_left, int32_t cur_right);
-        float calculate_lookahead_heading_pd(float lookahead_dist_mm, float dir = 1.0f);
-        void run_straight_sync(float base_speed, int32_t cur_left, int32_t cur_right, float lookahead_dist = 80.0f);
+        float calculate_lookahead_heading_pd(float lookahead_dist_mm, float dir = 1.0f, bool heading_only = false);
+        void run_straight_sync(float base_speed, int32_t cur_left, int32_t cur_right, float lookahead_dist = 80.0f, bool heading_only = false);
 
     public:
         DriveBase(Motor& left, Motor& right, ColorSensor& left_sens, ColorSensor& right_sens);

@@ -27,7 +27,13 @@ void main_task(intptr_t unused) {
 
     run_main_course();
     // run_calibration();
-    run_color_calibration();
+    // run_color_calibration();
 
     ext_tsk();
 }
+
+// EV3-RT環境用のメモリバリアダミー関数
+extern "C" void __sync_synchronize() {
+    // 空実装で問題ありません
+}
+

@@ -39,6 +39,17 @@ namespace pybricks {
         }
     }
 
+    void Motor::dc(float power_percent) {
+        if (power_percent > 100.0f) power_percent = 100.0f;
+        if (power_percent < -100.0f) power_percent = -100.0f;
+        int power = (int)roundf(power_percent);
+        int target_power = is_reversed ? -power : power;
+        if (target_power != last_power) {
+            ev3_motor_set_power(port, target_power);
+            last_power = target_power;
+        }
+    }
+
     void Motor::stop() {
         last_power = -999;
         ev3_motor_stop(port, false);
@@ -76,6 +87,48 @@ namespace pybricks {
             if (then == Stop::COAST) stop();
             else brake();
         }
+    }
+
+    bool Motor::run_until_stalled(int power) {
+        if (power > 100) power = 100;
+        if (power < -100) power = -100;
+        if (power == 0) {
+            brake();
+            return false;
+        }
+
+        last_power = is_reversed ? -power : power;
+        ev3_motor_set_power(port, last_power);
+
+        const int poll_ms = 10;
+        const int startup_ms = 300;
+        const int stall_ms = 100;
+        const int timeout_ms = 5000;
+        int still_ms = 0;
+        int32_t reference_angle = angle();
+
+        for (int elapsed_ms = 0; elapsed_ms < timeout_ms; elapsed_ms += poll_ms) {
+            tslp_tsk(poll_ms * 1000);
+            int32_t current_angle = angle();
+            if (elapsed_ms < startup_ms) {
+                reference_angle = current_angle;
+                continue;
+            }
+
+            if (fabsf((float)current_angle - (float)reference_angle) > 2.0f) {
+                reference_angle = current_angle;
+                still_ms = 0;
+            } else {
+                still_ms += poll_ms;
+                if (still_ms >= stall_ms) {
+                    brake();
+                    return true;
+                }
+            }
+        }
+
+        brake();
+        return false;
     }
 
     int32_t Motor::angle() {
@@ -158,6 +211,8 @@ namespace pybricks {
         pose_x = 0.0f;
         pose_y = 0.0f;
         pose_theta = 0.0f;
+        heading_prev_error = 0.0f;
+        heading_pd_initialized = false;
         prev_left_enc = 0;
         prev_right_enc = 0;
 
@@ -185,7 +240,7 @@ namespace pybricks {
 
         const float Kp = 1.20f;  
         const float Ki = 0.05f;  
-        const float Kd = 0.04f;  
+        const float Kd = 0.2f;  
 
         float p_term = Kp * diff;
 
@@ -211,6 +266,8 @@ namespace pybricks {
         pose_x = 0.0f;
         pose_y = 0.0f;
         pose_theta = 0.0f;
+        heading_prev_error = 0.0f;
+        heading_pd_initialized = false;
         prev_left_enc = left_motor->angle();
         prev_right_enc = right_motor->angle();
     }
@@ -236,7 +293,7 @@ namespace pybricks {
         while (pose_theta < -M_PI) pose_theta += 2.0f * (float)M_PI;
     }
 
-    float DriveBase::calculate_lookahead_heading_pd(float lookahead_dist_mm, float dir) {
+    float DriveBase::calculate_lookahead_heading_pd(float lookahead_dist_mm, float dir, bool heading_only) {
         float lookahead_sign = (dir >= 0.0f) ? 1.0f : -1.0f;
         float target_x = pose_x + (lookahead_dist_mm * lookahead_sign);
         float target_y = 0.0f; 
@@ -247,20 +304,27 @@ namespace pybricks {
             target_theta += (float)M_PI;
         }
 
+        // 横線で観測できるのは姿勢角。初期姿勢を修正した後に、
+        // 傾いた初期座標系で積算した横位置へ戻そうとしない。
+        if (heading_only) target_theta = 0.0f;
+
         float error_theta = target_theta - pose_theta;
 
         while (error_theta > M_PI)  error_theta -= 2.0f * (float)M_PI;
         while (error_theta < -M_PI) error_theta += 2.0f * (float)M_PI;
 
-        static float prev_error = 0.0f;
         float dt = control_period_ms / 1000.0f;
         if (dt <= 0.0f) dt = 0.010f;
 
         const float Kp = 2.0f;   
         const float Kd = 0.1f;   
 
-        float derivative = (error_theta - prev_error) / dt;
-        prev_error = error_theta;
+        float error_delta = error_theta - heading_prev_error;
+        while (error_delta > M_PI) error_delta -= 2.0f * (float)M_PI;
+        while (error_delta < -M_PI) error_delta += 2.0f * (float)M_PI;
+        float derivative = heading_pd_initialized ? error_delta / dt : 0.0f;
+        heading_prev_error = error_theta;
+        heading_pd_initialized = true;
 
         float u = (Kp * error_theta) + (Kd * derivative);
 
@@ -271,11 +335,11 @@ namespace pybricks {
         return u;
     }
 
-    void DriveBase::run_straight_sync(float base_speed, int32_t cur_left, int32_t cur_right, float lookahead_dist) {
+    void DriveBase::run_straight_sync(float base_speed, int32_t cur_left, int32_t cur_right, float lookahead_dist, bool heading_only) {
         update_odometry(cur_left, cur_right);
 
         float dir = (base_speed >= 0.0f) ? 1.0f : -1.0f;
-        float u = calculate_lookahead_heading_pd(lookahead_dist, dir);
+        float u = calculate_lookahead_heading_pd(lookahead_dist, dir, heading_only);
         float turn_power = fabsf(base_speed) * u;
 
         float left_target  = base_speed - turn_power;
@@ -600,6 +664,9 @@ namespace pybricks {
                     if (!pid_mode && (l_val <= target + 0.2f || r_val <= target + 0.2f)) {
                         ev3_speaker_play_tone(1000, 50);
                         pid_mode = true;
+                        // 切替直後の微分キックを防ぐ。
+                        l_prev_error = filtered_l_val - target;
+                        r_prev_error = filtered_r_val - target;
                     }
                 }
             }
@@ -626,9 +693,10 @@ namespace pybricks {
                 float l_error = filtered_l_val - target;
                 float r_error = filtered_r_val - target;
 
-                float total_error = fabsf(l_error) + fabsf(r_error);
-                
-                if (total_error <= config_tolerance) {
+                bool l_aligned = fabsf(l_error) <= config_tolerance;
+                bool r_aligned = fabsf(r_error) <= config_tolerance;
+
+                if (l_aligned && r_aligned) {
                     stable_count++;
                     if (stable_count >= target_stable_count) {
                         break;
@@ -660,7 +728,20 @@ namespace pybricks {
                 if (r_output < -max_out) r_output = -max_out;
 
                 float align_dir = (dir >= 0.0f) ? 1.0f : -1.0f;
-                run_motors(align_dir * l_output, align_dir * r_output);
+                // 許容範囲内の車輪は制動し、もう片側の位置合わせを待つ。
+                // 速度指令の最低出力補正を通さず、PID出力を直接％で与える。
+                if (l_aligned) {
+                    l_integral = 0.0f;
+                    left_motor->brake();
+                } else {
+                    left_motor->dc(align_dir * l_output);
+                }
+                if (r_aligned) {
+                    r_integral = 0.0f;
+                    right_motor->brake();
+                } else {
+                    right_motor->dc(align_dir * r_output);
+                }
             }
 
             tslp_tsk(sleep_us);
@@ -823,10 +904,17 @@ namespace pybricks {
 
                             float sensor_width_total = 2.0f * sensor_x;
 
-                            float angle_error_rad = asinf(center_diff_mm / sensor_width_total);
-                            pose_theta = angle_error_rad; 
-                            
-                            pose_y = -sensor_y * sinf(pose_theta);
+                            // 符号付き走行距離の左右差 = センサー間隔 * tan(姿勢角)。
+                            // 後退時もエンコーダーの符号が入るため追加の符号反転は不要。
+                            bool use_line_heading = dir > 0.0f || DriveConfig::reverse_line_heading_correction;
+                            if (use_line_heading && sensor_width_total > 0.0f) {
+                                update_odometry(cur_left_total, cur_right_total);
+                                pose_theta = atanf(center_diff_mm / sensor_width_total);
+                                // 観測による角度の段差を微分項へ入れない。
+                                heading_pd_initialized = false;
+                            }
+                            // 横線だけでは横位置は観測できないので、pose_y は保持する。
+                            // 後退時はライン通過で姿勢を変更せず、通常のオドメトリを継続。
 
                             align_processing = false;
                             in_line_zone = false;
@@ -846,7 +934,7 @@ namespace pybricks {
                 }
             }
 
-            run_straight_sync(dir * current_speed, cur_left_total, cur_right_total);
+            run_straight_sync(dir * current_speed, cur_left_total, cur_right_total, 80.0f, dir < 0.0f);
 
             tslp_tsk(sleep_us);
         }
