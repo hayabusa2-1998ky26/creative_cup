@@ -175,10 +175,6 @@ void run_main_course() {
         goal_pos = find(COLOR_ORDER, colors[ago_pos]);
         robot.straight_lines(ago_pos - goal_pos, abs(ago_pos - goal_pos) * LINE_INTERVAL);
         
-        if (ago_pos < goal_pos) {
-            robot.straight(-15);
-            tslp_tsk(1000*300);
-        }
         ago_pos = goal_pos;
     }
 

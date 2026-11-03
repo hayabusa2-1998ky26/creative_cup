@@ -769,6 +769,9 @@ namespace pybricks {
         float accel = (DriveConfig::straight_accel / wheel_circ) * 360.0f;
         float target_deg = fabsf((distance_mm / wheel_circ) * 360.0f);
 
+        // ★追加: 後退時の追加20mm進むための目標角度
+        float extra_reverse_target_deg = (20.0f / wheel_circ) * 360.0f;
+
         int32_t start_left = left_motor->angle();
         int32_t start_right = right_motor->angle();
 
@@ -794,6 +797,10 @@ namespace pybricks {
 
         bool callback_pending = false;
         int32_t callback_start_deg = 0;
+
+        // ★追加: 後退時に最後の線を検知した後の20mm継続走行を管理するフラグ
+        bool wait_for_extra_reverse = false;
+        int32_t extra_reverse_start_deg = 0;
 
         ev3_lcd_set_font(EV3_FONT_MEDIUM);
         ev3_lcd_fill_rect(0, 0, EV3_LCD_WIDTH, EV3_LCD_HEIGHT, EV3_LCD_WHITE);
@@ -830,96 +837,115 @@ namespace pybricks {
 
             // ★ メソッド開始から 20mm 以上進んでから各種検知処理を有効化
             if (total_moved_mm >= DriveConfig::initial_ignore_dist) {
-                if (!white_exit_initialized) {
-                    waiting_for_white_exit = (l_on_black || r_on_black);
-                    white_exit_initialized = true;
-                }
-
-                if (waiting_for_white_exit) {
-                    if (l_val > target + 0.16f && r_val > target + 0.16f) {
-                        waiting_for_white_exit = false;
-                        has_detected_any_line = true;
-                        last_line_detected_l = cur_left_total;
-                        last_line_detected_r = cur_right_total;
+                
+                // ★追加: 最後の線を検知した後、追加で20mm後退するフェーズ
+                if (wait_for_extra_reverse) {
+                    float extra_moved_deg = fabsf((float)(cur_forward - extra_reverse_start_deg));
+                    if (extra_moved_deg >= extra_reverse_target_deg) {
+                        // 20mm後退しきったところで、前向きに straight_line へ移行
+                        straight_line(0.0f, run_speed_mm, target, true, false, true);
+                        return;
                     }
                 } else {
-                    float moved_from_last_line_deg = (fabsf((float)(cur_left_total - last_line_detected_l)) + 
-                                                      fabsf((float)(cur_right_total - last_line_detected_r))) / 2.0f;
-                    float moved_from_last_line_mm = (moved_from_last_line_deg / 360.0f) * wheel_circ;
-                    bool blind_ok = !has_detected_any_line || (moved_from_last_line_mm >= line_blind_dist);
-
-                    if (!in_line_zone && blind_ok && (l_on_black || r_on_black)) {
-                        in_line_zone = true;
-                        crossed_lines++;
-                        has_detected_any_line = true;
-                        last_line_detected_l = cur_left_total;
-                        last_line_detected_r = cur_right_total;
-
-                        ev3_speaker_play_tone(1000, 50);
-
-                        // DriveBase::straight_lines の最終線到達時の処理
-                        if (crossed_lines >= target_lines) {
-                            bool is_reverse = (dir < 0.0f);
-                            // ★ 第6引数 (skip_initial_ignore) に true を指定して呼び出す
-                            straight_line(0.0f, run_speed_mm, target, true, is_reverse, true);
-                            return;
-                        } else {
-                            if (func != nullptr) {
-                                callback_pending = true;
-                                callback_start_deg = cur_forward;
-                            }
-                        }
-
-                        align_processing = true;
-                        l_in_line = l_on_black;
-                        r_in_line = r_on_black;
-                        l_enter_deg = l_on_black ? cur_forward : 0;
-                        r_enter_deg = r_on_black ? cur_forward : 0;
-                        l_exit_deg = 0;
-                        r_exit_deg = 0;
+                    // 通常のライン検知・白抜け判定フェーズ
+                    if (!white_exit_initialized) {
+                        waiting_for_white_exit = (l_on_black || r_on_black);
+                        white_exit_initialized = true;
                     }
-                    else if (in_line_zone && align_processing) {
-                        if (l_on_black && !l_in_line) {
-                            l_in_line = true;
-                            l_enter_deg = cur_forward;
-                        } else if (!l_on_black && l_in_line) {
-                            l_in_line = false;
-                            l_exit_deg = cur_forward;
+
+                    if (waiting_for_white_exit) {
+                        if (l_val > target + 0.16f && r_val > target + 0.16f) {
+                            waiting_for_white_exit = false;
+                            has_detected_any_line = true;
+                            last_line_detected_l = cur_left_total;
+                            last_line_detected_r = cur_right_total;
                         }
+                    } else {
+                        float moved_from_last_line_deg = (fabsf((float)(cur_left_total - last_line_detected_l)) + 
+                                                          fabsf((float)(cur_right_total - last_line_detected_r))) / 2.0f;
+                        float moved_from_last_line_mm = (moved_from_last_line_deg / 360.0f) * wheel_circ;
+                        bool blind_ok = !has_detected_any_line || (moved_from_last_line_mm >= line_blind_dist);
 
-                        if (r_on_black && !r_in_line) {
-                            r_in_line = true;
-                            r_enter_deg = cur_forward;
-                        } else if (!r_on_black && r_in_line) {
-                            r_in_line = false;
-                            r_exit_deg = cur_forward;
-                        }
+                        if (!in_line_zone && blind_ok && (l_on_black || r_on_black)) {
+                            in_line_zone = true;
+                            crossed_lines++;
+                            has_detected_any_line = true;
+                            last_line_detected_l = cur_left_total;
+                            last_line_detected_r = cur_right_total;
 
-                        if (!l_on_black && !r_on_black && l_exit_deg != 0 && r_exit_deg != 0) {
-                            int32_t l_center = (l_enter_deg + l_exit_deg) / 2;
-                            int32_t r_center = (r_enter_deg + r_exit_deg) / 2;
+                            ev3_speaker_play_tone(1000, 50);
 
-                            int32_t center_diff = l_center - r_center;
-                            float center_diff_mm = ((float)center_diff / 360.0f) * (wheel_diameter * (float)M_PI);
-
-                            float sensor_width_total = 2.0f * sensor_x;
-
-                            // 符号付き走行距離の左右差 = センサー間隔 * tan(姿勢角)。
-                            // 後退時もエンコーダーの符号が入るため追加の符号反転は不要。
-                            bool use_line_heading = dir > 0.0f || DriveConfig::reverse_line_heading_correction;
-                            if (use_line_heading && sensor_width_total > 0.0f) {
-                                update_odometry(cur_left_total, cur_right_total);
-                                pose_theta = atanf(center_diff_mm / sensor_width_total);
-                                // 観測による角度の段差を微分項へ入れない。
-                                heading_pd_initialized = false;
+                            // DriveBase::straight_lines の最終線到達時の処理
+                            if (crossed_lines >= target_lines) {
+                                bool is_reverse = (dir < 0.0f);
+                                
+                                if (is_reverse) {
+                                    // ★変更: バック時はフラグを立てて現在の角度を記録し、ループを継続して20mm後退させる
+                                    wait_for_extra_reverse = true;
+                                    extra_reverse_start_deg = cur_forward;
+                                } else {
+                                    // 前進時は従来通り即座に straight_line へ
+                                    straight_line(0.0f, run_speed_mm, target, true, is_reverse, true);
+                                    return;
+                                }
+                            } else {
+                                if (func != nullptr) {
+                                    callback_pending = true;
+                                    callback_start_deg = cur_forward;
+                                }
                             }
-                            // 横線だけでは横位置は観測できないので、pose_y は保持する。
-                            // 後退時はライン通過で姿勢を変更せず、通常のオドメトリを継続。
 
-                            align_processing = false;
-                            in_line_zone = false;
+                            align_processing = true;
+                            l_in_line = l_on_black;
+                            r_in_line = r_on_black;
+                            l_enter_deg = l_on_black ? cur_forward : 0;
+                            r_enter_deg = r_on_black ? cur_forward : 0;
                             l_exit_deg = 0;
                             r_exit_deg = 0;
+                        }
+                        else if (in_line_zone && align_processing) {
+                            if (l_on_black && !l_in_line) {
+                                l_in_line = true;
+                                l_enter_deg = cur_forward;
+                            } else if (!l_on_black && l_in_line) {
+                                l_in_line = false;
+                                l_exit_deg = cur_forward;
+                            }
+
+                            if (r_on_black && !r_in_line) {
+                                r_in_line = true;
+                                r_enter_deg = cur_forward;
+                            } else if (!r_on_black && r_in_line) {
+                                r_in_line = false;
+                                r_exit_deg = cur_forward;
+                            }
+
+                            if (!l_on_black && !r_on_black && l_exit_deg != 0 && r_exit_deg != 0) {
+                                int32_t l_center = (l_enter_deg + l_exit_deg) / 2;
+                                int32_t r_center = (r_enter_deg + r_exit_deg) / 2;
+
+                                int32_t center_diff = l_center - r_center;
+                                float center_diff_mm = ((float)center_diff / 360.0f) * (wheel_diameter * (float)M_PI);
+
+                                float sensor_width_total = 2.0f * sensor_x;
+
+                                // 符号付き走行距離の左右差 = センサー間隔 * tan(姿勢角)。
+                                // 後退時もエンコーダーの符号が入るため追加の符号反転は不要。
+                                bool use_line_heading = dir > 0.0f || DriveConfig::reverse_line_heading_correction;
+                                if (use_line_heading && sensor_width_total > 0.0f) {
+                                    update_odometry(cur_left_total, cur_right_total);
+                                    pose_theta = atanf(center_diff_mm / sensor_width_total);
+                                    // 観測による角度の段差を微分項へ入れない。
+                                    heading_pd_initialized = false;
+                                }
+                                // 横線だけでは横位置は観測できないので、pose_y は保持する。
+                                // 後退時はライン通過で姿勢を変更せず、通常のオドメトリを継続。
+
+                                align_processing = false;
+                                in_line_zone = false;
+                                l_exit_deg = 0;
+                                r_exit_deg = 0;
+                            }
                         }
                     }
                 }
