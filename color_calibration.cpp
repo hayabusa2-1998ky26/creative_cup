@@ -42,7 +42,7 @@ void run_color_calibration() {
     int32_t start_r = r_mot.angle();
 
     // 200mm進むための目標モーター角度を計算
-    const float target_dist_mm = 200.0f;
+    const float target_dist_mm = 1000.0f;
     float wheel_circ = pybricks::DriveConfig::wheel_diameter * (float)M_PI;
     float target_deg = (target_dist_mm / wheel_circ) * 360.0f;
 

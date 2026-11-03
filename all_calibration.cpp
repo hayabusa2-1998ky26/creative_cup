@@ -67,7 +67,6 @@ void run_calibration() {
     // ==========================================
     // 100mm前進して旋回スペースを確保
     ev3_lcd_draw_string("3/4: Turn 540", 0, 60);
-    db.straight(100.0f);
     tslp_tsk(300 * 1000);
 
     // ★旋回前のモーター角度を記録
@@ -84,19 +83,20 @@ void run_calibration() {
     float turn_wheel_deg = (fabsf((float)(turn_end_l - turn_start_l)) + fabsf((float)(turn_end_r - turn_start_r))) / 2.0f;
 
     ev3_lcd_draw_string("4/4: Check Track", 0, 85);
-
+    tslp_tsk(1000*10);
     int crossed_lines = 0;
     float measured_angle_error_deg = 0.0f;
     int threshold = pybricks::DriveConfig::target_val;
 
     db.drive(CALIB_SPEED_MM_S, 0.0f);
+    ev3_speaker_play_tone(1000, 50);
 
     while (crossed_lines < 2) {
         bool l_on_black = false, r_on_black = false;
         int32_t l_enter = 0, r_enter = 0;
         int32_t l_exit = 0, r_exit = 0;
 
-        while(l_sens.reflection() < threshold + 10 && r_sens.reflection() < threshold + 10) {
+        while(l_sens.reflection() < threshold + 0.2 || r_sens.reflection() < threshold + 0.2) {
             tslp_tsk(10 * 1000);
         }
 
@@ -108,11 +108,11 @@ void run_calibration() {
             if (!l_on_black && l_val <= threshold) { l_on_black = true; l_enter = cur_avg_deg; }
             if (!r_on_black && r_val <= threshold) { r_on_black = true; r_enter = cur_avg_deg; }
 
-            if (l_on_black && l_exit == 0 && l_val > threshold + 10) { l_exit = cur_avg_deg; }
-            if (r_on_black && r_exit == 0 && r_val > threshold + 10) { r_exit = cur_avg_deg; }
+            if (l_on_black && l_exit == 0 && l_val + 0.2 > threshold) { l_exit = cur_avg_deg; }
+            if (r_on_black && r_exit == 0 && r_val + 0.2 > threshold) { r_exit = cur_avg_deg; }
 
             if (l_exit != 0 && r_exit != 0) break;
-            tslp_tsk(5 * 1000);
+            tslp_tsk(10 * 1000);
         }
 
         int32_t l_center = (l_enter + l_exit) / 2;

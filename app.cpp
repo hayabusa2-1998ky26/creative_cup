@@ -22,6 +22,7 @@ void main_task(intptr_t unused) {
     // ★変更: キャリブレーション設定値を渡してインスタンス生成
     left_sensor  = new pybricks::ColorSensor(EV3_PORT_2, pybricks::DriveConfig::left_sensor_min, pybricks::DriveConfig::left_sensor_max);
     right_sensor = new pybricks::ColorSensor(EV3_PORT_3, pybricks::DriveConfig::right_sensor_min, pybricks::DriveConfig::right_sensor_max);
+    ev3_sensor_config(EV3_PORT_1, COLOR_SENSOR);
 
     robot = new pybricks::DriveBase(*left_motor, *right_motor, *left_sensor, *right_sensor);
 

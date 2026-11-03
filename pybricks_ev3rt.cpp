@@ -586,8 +586,7 @@ namespace pybricks {
         else brake();
     }
 
-    // ★変更: 引数 skip_initial_ignore を追加
-    void DriveBase::straight_line(float distance_mm, float speed_mm_per_sec, float target_val, bool skip_white_exit_check, bool reverse, bool skip_initial_ignore) {
+    void DriveBase::straight_line(float distance_mm, float speed_mm_per_sec, float target_val, bool skip_white_exit_check, bool reverse, bool skip_initial_ignore, bool color_inversion) {
         float target = (target_val < 0.0f) ? config_target_val : target_val;
         
         float run_speed_mm = (speed_mm_per_sec == 0.0f) ? DriveConfig::straight_speed : fabsf(speed_mm_per_sec);
@@ -629,7 +628,6 @@ namespace pybricks {
         bool waiting_for_white_exit = false;
         bool white_exit_initialized = false;
 
-        // ★ skip_initial_ignore が true の場合は無視距離を 0mm に設定
         float ignore_dist = skip_initial_ignore ? 0.0f : DriveConfig::initial_ignore_dist;
 
         while (true) {
@@ -647,26 +645,33 @@ namespace pybricks {
             filtered_l_val += DriveConfig::color_lpf_gain * (l_val - filtered_l_val);
             filtered_r_val += DriveConfig::color_lpf_gain * (r_val - filtered_r_val);
 
-            // ★ ignore_dist (0mm または 20mm) 以上進んだら有効化
+            // ★追加: color_inversion の状態に応じた判定フラグを生成
+            bool l_detected = color_inversion ? (l_val >= target - 0.2f) : (l_val <= target + 0.2f);
+            bool r_detected = color_inversion ? (r_val >= target - 0.2f) : (r_val <= target + 0.2f);
+            
+            bool l_exited = color_inversion ? (l_val < target - 0.16f) : (l_val > target + 0.16f);
+            bool r_exited = color_inversion ? (r_val < target - 0.16f) : (r_val > target + 0.16f);
+
             if (moved_mm >= ignore_dist) {
                 if (!white_exit_initialized) {
                     if (!skip_white_exit_check) {
-                        waiting_for_white_exit = (l_val <= target + 0.2f || r_val <= target + 0.2f);
+                        waiting_for_white_exit = (l_detected || r_detected);
                     }
                     white_exit_initialized = true;
                 }
 
                 if (waiting_for_white_exit) {
-                    if (l_val > target + 0.16f && r_val > target + 0.16f) {
+                    if (l_exited && r_exited) {
                         waiting_for_white_exit = false;
                     }
                 } else {
-                    if (!pid_mode && (l_val <= target + 0.2f || r_val <= target + 0.2f)) {
+                    if (!pid_mode && (l_detected || r_detected)) {
                         ev3_speaker_play_tone(1000, 50);
                         pid_mode = true;
-                        // 切替直後の微分キックを防ぐ。
-                        l_prev_error = filtered_l_val - target;
-                        r_prev_error = filtered_r_val - target;
+                        
+                        // ★修正: 反転時はエラーの符号も反転させて微分キックを防ぐ
+                        l_prev_error = color_inversion ? (target - filtered_l_val) : (filtered_l_val - target);
+                        r_prev_error = color_inversion ? (target - filtered_r_val) : (filtered_r_val - target);
                     }
                 }
             }
@@ -690,8 +695,9 @@ namespace pybricks {
                 run_straight_sync(dir * current_speed, cur_left, cur_right);
 
             } else {
-                float l_error = filtered_l_val - target;
-                float r_error = filtered_r_val - target;
+                // ★修正: PIDエラーの計算。反転時は (目標 - 現在値) とすることで、制御の向きを一致させる
+                float l_error = color_inversion ? (target - filtered_l_val) : (filtered_l_val - target);
+                float r_error = color_inversion ? (target - filtered_r_val) : (filtered_r_val - target);
 
                 bool l_aligned = fabsf(l_error) <= config_tolerance;
                 bool r_aligned = fabsf(r_error) <= config_tolerance;
@@ -728,8 +734,6 @@ namespace pybricks {
                 if (r_output < -max_out) r_output = -max_out;
 
                 float align_dir = (dir >= 0.0f) ? 1.0f : -1.0f;
-                // 許容範囲内の車輪は制動し、もう片側の位置合わせを待つ。
-                // 速度指令の最低出力補正を通さず、PID出力を直接％で与える。
                 if (l_aligned) {
                     l_integral = 0.0f;
                     left_motor->brake();
@@ -750,8 +754,14 @@ namespace pybricks {
         brake();
     }
 
-    void DriveBase::straight_lines(int line_count, float distance_mm, void (*func)(), float func_distance, float speed_mm_per_sec, float target_val) {
+    // ★変更: 第8引数 extra_straight を追加
+void DriveBase::straight_lines(int line_count, float distance_mm, void (*func)(), float func_distance, float speed_mm_per_sec, float target_val, bool red_mind, float extra_straight) {
         if (line_count == 0) return;
+
+        if (red_mind) {
+            rgb_raw_t dummy_rgb;
+            ev3_color_sensor_get_rgb_raw(EV3_PORT_1, &dummy_rgb);
+        }
 
         float dir = (line_count > 0) ? 1.0f : -1.0f;
         int target_lines = abs(line_count);
@@ -769,8 +779,12 @@ namespace pybricks {
         float accel = (DriveConfig::straight_accel / wheel_circ) * 360.0f;
         float target_deg = fabsf((distance_mm / wheel_circ) * 360.0f);
 
-        // ★追加: 後退時の追加20mm進むための目標角度
         float extra_reverse_target_deg = (20.0f / wheel_circ) * 360.0f;
+        
+        // ★修正: extra_straight はマイナスで渡されることがあるため、fabsfで絶対値を取得する
+        float extra_straight_target_deg = (fabsf(extra_straight) / wheel_circ) * 360.0f;
+        bool wait_for_extra_straight = false;
+        int32_t extra_straight_start_deg = 0;
 
         int32_t start_left = left_motor->angle();
         int32_t start_right = right_motor->angle();
@@ -791,14 +805,12 @@ namespace pybricks {
         int32_t last_line_detected_l = start_left;
         int32_t last_line_detected_r = start_right;
 
-        // ★ 白抜け判定の初期化を20mm走順まで保留
         bool waiting_for_white_exit = false;
         bool white_exit_initialized = false;
 
         bool callback_pending = false;
         int32_t callback_start_deg = 0;
 
-        // ★追加: 後退時に最後の線を検知した後の20mm継続走行を管理するフラグ
         bool wait_for_extra_reverse = false;
         int32_t extra_reverse_start_deg = 0;
 
@@ -810,6 +822,19 @@ namespace pybricks {
             int32_t cur_left_total = left_motor->angle();
             int32_t cur_right_total = right_motor->angle();
             int32_t cur_forward = (cur_left_total + cur_right_total) / 2;
+            
+            // ★追加・修正: extra_straight 分の距離に達したかの判定（後退時も絶対値で正しく測られます）
+            if (wait_for_extra_straight) {
+                float extra_moved_deg = fabsf((float)(cur_forward - extra_straight_start_deg));
+                if (extra_moved_deg >= extra_straight_target_deg) {
+                    // ★追加: 停止条件を満たした時点で func が未実行なら確実に発火させる
+                    if (callback_pending && func != nullptr) {
+                        func();
+                        callback_pending = false;
+                    }
+                    break;
+                }
+            }
 
             int32_t total_left_moved = cur_left_total - start_left;
             int32_t total_right_moved = cur_right_total - start_right;
@@ -835,19 +860,14 @@ namespace pybricks {
             bool l_on_black = (l_val <= target);
             bool r_on_black = (r_val <= target);
 
-            // ★ メソッド開始から 20mm 以上進んでから各種検知処理を有効化
             if (total_moved_mm >= DriveConfig::initial_ignore_dist) {
-                
-                // ★追加: 最後の線を検知した後、追加で20mm後退するフェーズ
                 if (wait_for_extra_reverse) {
                     float extra_moved_deg = fabsf((float)(cur_forward - extra_reverse_start_deg));
                     if (extra_moved_deg >= extra_reverse_target_deg) {
-                        // 20mm後退しきったところで、前向きに straight_line へ移行
                         straight_line(0.0f, run_speed_mm, target, true, false, true);
                         return;
                     }
                 } else {
-                    // 通常のライン検知・白抜け判定フェーズ
                     if (!white_exit_initialized) {
                         waiting_for_white_exit = (l_on_black || r_on_black);
                         white_exit_initialized = true;
@@ -875,23 +895,39 @@ namespace pybricks {
 
                             ev3_speaker_play_tone(1000, 50);
 
-                            // DriveBase::straight_lines の最終線到達時の処理
-                            if (crossed_lines >= target_lines) {
+                            // ★修正: 誤差を考慮し、extra_straight が「指定されていない(0.0f)」かどうかの判定を厳格化
+                            if (crossed_lines >= target_lines && fabsf(extra_straight) < 0.001f) {
                                 bool is_reverse = (dir < 0.0f);
                                 
                                 if (is_reverse) {
-                                    // ★変更: バック時はフラグを立てて現在の角度を記録し、ループを継続して20mm後退させる
                                     wait_for_extra_reverse = true;
                                     extra_reverse_start_deg = cur_forward;
                                 } else {
-                                    // 前進時は従来通り即座に straight_line へ
                                     straight_line(0.0f, run_speed_mm, target, true, is_reverse, true);
                                     return;
                                 }
                             } else {
+                                // ★修正: マイナス値でもこのブロックに入り、追加の直進待機フラグが立つ
+                                if (crossed_lines >= target_lines) {
+                                    wait_for_extra_straight = true;
+                                    extra_straight_start_deg = cur_forward;
+                                }
+
                                 if (func != nullptr) {
                                     callback_pending = true;
                                     callback_start_deg = cur_forward;
+                                }
+
+                                if (red_mind) {
+                                    rgb_raw_t rgb_val;
+                                    ev3_color_sensor_get_rgb_raw(EV3_PORT_1, &rgb_val);
+                                    float avg_gb = (rgb_val.g + rgb_val.b) / 2.0f;
+                                    
+                                    if ((float)rgb_val.r < avg_gb * 1.2f) {
+                                        pose_y -= 4.0f;
+                                    } else {
+                                        pose_y += 4.0f;
+                                    }
                                 }
                             }
 
@@ -929,17 +965,12 @@ namespace pybricks {
 
                                 float sensor_width_total = 2.0f * sensor_x;
 
-                                // 符号付き走行距離の左右差 = センサー間隔 * tan(姿勢角)。
-                                // 後退時もエンコーダーの符号が入るため追加の符号反転は不要。
                                 bool use_line_heading = dir > 0.0f || DriveConfig::reverse_line_heading_correction;
                                 if (use_line_heading && sensor_width_total > 0.0f) {
                                     update_odometry(cur_left_total, cur_right_total);
                                     pose_theta = atanf(center_diff_mm / sensor_width_total);
-                                    // 観測による角度の段差を微分項へ入れない。
                                     heading_pd_initialized = false;
                                 }
-                                // 横線だけでは横位置は観測できないので、pose_y は保持する。
-                                // 後退時はライン通過で姿勢を変更せず、通常のオドメトリを継続。
 
                                 align_processing = false;
                                 in_line_zone = false;

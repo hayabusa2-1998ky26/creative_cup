@@ -129,9 +129,9 @@ namespace pybricks {
         void drive(float speed_mm_per_sec, float turn_rate_deg_per_sec);
         
         // ★変更: 第6引数 skip_initial_ignore を追加 (デフォルトは false)
-        void straight_line(float distance_mm = 0.0f, float speed_mm_per_sec = 0.0f, float target_val = -1.0f, bool skip_white_exit_check = false, bool reverse = false, bool skip_initial_ignore = false);
-        void straight_lines(int line_count, float distance_mm = 0.0f, void (*func)() = nullptr, float func_distance = 0.0f, float speed_mm_per_sec = 0.0f, float target_val = -1.0f);
-
+        // ★変更: 第7引数 color_inversion を追加 (デフォルトは false)
+        void straight_line(float distance_mm = 0.0f, float speed_mm_per_sec = 0.0f, float target_val = -1.0f, bool skip_white_exit_check = false, bool reverse = false, bool skip_initial_ignore = false, bool color_inversion = false);
+        void straight_lines(int line_count, float distance_mm = 0.0f, void (*func)() = nullptr, float func_distance = 0.0f, float speed_mm_per_sec = 0.0f, float target_val = -1.0f, bool red_mind = false, float extra_straight = 0.0f);
         void stop();
         void brake();
     };
