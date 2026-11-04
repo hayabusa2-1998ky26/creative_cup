@@ -202,6 +202,7 @@ namespace pybricks {
         straight_ki = DriveConfig::straight_ki;
         straight_kd = DriveConfig::straight_kd;
         config_tolerance = DriveConfig::tolerance;
+        config_strict_tolerance = DriveConfig::strict_tolerance;
         config_target_val = DriveConfig::target_val;
 
         drive_sync_initialized = false;
@@ -238,15 +239,15 @@ namespace pybricks {
         float dt = control_period_ms / 1000.0f;
         if (dt <= 0.0f) dt = 0.010f;
 
-        const float Kp = 1.20f;  
+        const float Kp = 1.50f;  
         const float Ki = 0.05f;  
         const float Kd = 0.2f;  
 
         float p_term = Kp * diff;
 
         integral += diff * dt;
-        if (integral > 30.0f)  integral = 30.0f;
-        if (integral < -30.0f) integral = -30.0f;
+        if (integral > 40.0f)  integral = 40.0f;
+        if (integral < -40.0f) integral = -40.0f;
         float i_term = Ki * integral;
 
         float derivative = (diff - prev_diff) / dt;
@@ -586,7 +587,7 @@ namespace pybricks {
         else brake();
     }
 
-    void DriveBase::straight_line(float distance_mm, float speed_mm_per_sec, float target_val, bool skip_white_exit_check, bool reverse, bool skip_initial_ignore, bool color_inversion) {
+    void DriveBase::straight_line(float distance_mm, float speed_mm_per_sec, float target_val, bool skip_white_exit_check, bool reverse, bool skip_initial_ignore, bool color_inversion, bool use_strict_tolerance) {
         float target = (target_val < 0.0f) ? config_target_val : target_val;
         
         float run_speed_mm = (speed_mm_per_sec == 0.0f) ? DriveConfig::straight_speed : fabsf(speed_mm_per_sec);
@@ -629,6 +630,15 @@ namespace pybricks {
         bool white_exit_initialized = false;
 
         float ignore_dist = skip_initial_ignore ? 0.0f : DriveConfig::initial_ignore_dist;
+
+        float used_tolerance;
+        if (use_strict_tolerance) {
+            used_tolerance = config_strict_tolerance;
+            ev3_speaker_play_tone(2000, 30);
+        } else {
+            used_tolerance = config_tolerance;
+            ev3_speaker_play_tone(1000, 30);
+        }
 
         while (true) {
             int32_t cur_left = left_motor->angle();
@@ -699,8 +709,8 @@ namespace pybricks {
                 float l_error = color_inversion ? (target - filtered_l_val) : (filtered_l_val - target);
                 float r_error = color_inversion ? (target - filtered_r_val) : (filtered_r_val - target);
 
-                bool l_aligned = fabsf(l_error) <= config_tolerance;
-                bool r_aligned = fabsf(r_error) <= config_tolerance;
+                bool l_aligned = fabsf(l_error) <= used_tolerance;
+                bool r_aligned = fabsf(r_error) <= used_tolerance;
 
                 if (l_aligned && r_aligned) {
                     stable_count++;
@@ -755,7 +765,7 @@ namespace pybricks {
     }
 
     // ★変更: 第8引数 extra_straight を追加
-void DriveBase::straight_lines(int line_count, float distance_mm, void (*func)(), float func_distance, float speed_mm_per_sec, float target_val, bool red_mind, float extra_straight) {
+    void DriveBase::straight_lines(int line_count, float distance_mm, void (*func)(), float func_distance, float speed_mm_per_sec, float target_val, bool red_mind, float extra_straight) {
         if (line_count == 0) return;
 
         if (red_mind) {
@@ -864,7 +874,7 @@ void DriveBase::straight_lines(int line_count, float distance_mm, void (*func)()
                 if (wait_for_extra_reverse) {
                     float extra_moved_deg = fabsf((float)(cur_forward - extra_reverse_start_deg));
                     if (extra_moved_deg >= extra_reverse_target_deg) {
-                        straight_line(0.0f, run_speed_mm, target, true, false, true);
+                        straight_line(0.0f, run_speed_mm, target, true, false, true, false, false);
                         return;
                     }
                 } else {
@@ -893,11 +903,11 @@ void DriveBase::straight_lines(int line_count, float distance_mm, void (*func)()
                             last_line_detected_l = cur_left_total;
                             last_line_detected_r = cur_right_total;
 
-                            ev3_speaker_play_tone(1000, 50);
 
                             // ★修正: 誤差を考慮し、extra_straight が「指定されていない(0.0f)」かどうかの判定を厳格化
                             if (crossed_lines >= target_lines && fabsf(extra_straight) < 0.001f) {
                                 bool is_reverse = (dir < 0.0f);
+                                ev3_speaker_play_tone(1000, 50);
                                 
                                 if (is_reverse) {
                                     wait_for_extra_reverse = true;
@@ -923,11 +933,25 @@ void DriveBase::straight_lines(int line_count, float distance_mm, void (*func)()
                                     ev3_color_sensor_get_rgb_raw(EV3_PORT_1, &rgb_val);
                                     float avg_gb = (rgb_val.g + rgb_val.b) / 2.0f;
                                     
-                                    if ((float)rgb_val.r < avg_gb * 1.2f) {
-                                        pose_y -= 4.0f;
+                                    // 目標点までの残り距離を計算 (全体の目標距離 - オドメトリ上の進行距離)
+                                    float remaining_dist_mm = fabsf(distance_mm) - total_moved_mm;
+                                    if (remaining_dist_mm < 0.0f) remaining_dist_mm = 0.0f;
+
+                                    // ずらしたい定数角度 (例: 1.5度。実機に合わせて調整してください)
+                                    float offset_angle_deg = 0.4f;
+                                    
+                                    // 残り距離と角度から、y方向のオフセット量を算出
+                                    float offset_y = remaining_dist_mm * tanf(offset_angle_deg * (float)M_PI / 180.0f);
+                                    
+                                    if ((float)rgb_val.r < avg_gb * 1.6f) {
+                                        pose_y -= offset_y;
+                                            ev3_speaker_play_tone(500, 50);
                                     } else {
-                                        pose_y += 4.0f;
+                                        pose_y += offset_y;
+                                            ev3_speaker_play_tone(2000, 50);
                                     }
+                                } else {
+                                    ev3_speaker_play_tone(1000, 50);
                                 }
                             }
 

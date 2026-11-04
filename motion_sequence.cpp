@@ -2,36 +2,49 @@
 #include "motor_control.h"
 #include "ev3api.h"
 
+void delay() {
+    tslp_tsk(1000*10);
+}
+
+void delay_little() {
+    tslp_tsk(1000*5);
+}
+
 void catch_block() {
-    rack_motor(-100, 100);
-    rack_motor(-50, 20);
-    tslp_tsk(1000*10);
+    rack_motor(-80, 100);
+    delay_little();
+    rack_motor(-40, 20);
+    delay();
     
-    catch_motor(-40, 100);
+    catch_motor(-30, 100);
+    delay_little();
     catch_motor(-60, 50);
+    delay_little();
     catch_motor(-80, 35);
+    delay_little();
     catch_motor(-20, 10);
-    tslp_tsk(1000*10);
+    delay();
 
-    rack_motor(-410, 100);
-    tslp_tsk(1000*10);
+    rack_motor(-440, 100);
+    delay();
 
-    catch_motor(90, 50);
-    catch_motor(15, 20);
-    tslp_tsk(1000*10);
+    catch_motor(80, 50);
+    delay_little();
+    catch_motor(20, 20);
+    delay();
 
-    rack_motor(100, 100);
+    rack_motor(200, 100);
 }
 
 extern bool is_in_progress;
 
 void return_arm(intptr_t unused) {
     is_in_progress = true;
-    tslp_tsk(1000*10);
-    rack_motor(450, 100);
-    tslp_tsk(1000*10);
+    delay();
+    rack_motor(350, 100);
+    delay();
     // catch_motor(55, 100);
-    catch_motor(55 + 40, 100);
+    catch_motor(60 + 30 - 20, 100); // 20は余裕
 
     act_tsk(INIT_ARM);
 
@@ -42,11 +55,11 @@ void return_arm(intptr_t unused) {
 
 void init_arm(intptr_t unused) {
 
-    rack_motor_until_stalled(1, 10);
-    tslp_tsk(1000*10);
+    rack_motor_until_stalled(1, 5);
+    delay();
     
-    catch_motor_until_stalled(1, 30);
-    tslp_tsk(1000*10);
+    catch_motor_until_stalled(1, 5);
+    delay();
 
     is_in_progress = false;
 

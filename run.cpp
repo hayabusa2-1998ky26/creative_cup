@@ -51,8 +51,6 @@ int find(const char* target_list, const char target_element) {
 
 
 void run_main_course() {
-    ev3_sensor_config(color_sensor_port, COLOR_SENSOR);
-
     auto& robot = *::robot;
     ev3_lcd_draw_string("Press Enter...", 0, 40);
 
@@ -85,22 +83,27 @@ void run_main_course() {
     // catch_block();
     // robot.straight_lines(4, LINE_INTERVAL * 3);
     // tslp_tsk(1000000000);
-    act_tsk(INIT_ARM);
-    robot.straight_line(330);
+    robot.straight_line(330, 0.0f, -1.0f, false, false, false, false, true);
     tslp_tsk(1000 * 50);
 
     robot.straight(15);
     tslp_tsk(1000 * 50);
     
     robot.turn(90);
-    robot.straight_lines(4, LINE_INTERVAL_START + LINE_INTERVAL * 3 - 80 + 40, &color_reading, 128, 0.0f, -1.0f, true); // 40は微調整値
+    tslp_tsk(1000*50);
+    robot.straight_lines(4, LINE_INTERVAL_START + LINE_INTERVAL * 3 - 80 + 40, &color_reading, 128, 0.0f, -1.0f, false); // 40は微調整値
     robot.straight(128);
     color_reading();
     // robot.straight_lines(4, LINE_INTERVAL_START + LINE_INTERVAL * 3 - 80 + 140 + 40, &color_reading, 128, 0.0f, -1.0f, true, 140); // 40は微調整値
+    
     tslp_tsk(1000*100);
     
-    robot.wide_forward(180, 217 / 2);
-    robot.straight_lines(4, LINE_INTERVAL * 3 - 80 + 128);
+    robot.wide_forward(180, 208 / 2);
+    ev3_sensor_config(EV3_PORT_4, NONE_SENSOR);
+    ev3_sensor_config(EV3_PORT_1, COLOR_SENSOR);
+    
+    act_tsk(INIT_ARM);
+    robot.straight_lines(4, LINE_INTERVAL * 3 - 80 + 128, nullptr, 0.0f, 0.0f, -1.0f, true);
 
     // // 画面表示用に文字列をフォーマット
     // char buf_r[32], buf_g[32], buf_b[32];
@@ -130,9 +133,9 @@ void run_main_course() {
         int g = rgbs[i][1];
         int b = rgbs[i][2];
         
-        b_score[i] = b - (r + g) / 2.0;
+        b_score[i] = b - (r + g) / 2.0f;
         n_score[i] = abs(r - g) + abs(g - b) + abs(b - r);
-        y_score[i] = g;
+        y_score[i] = g - (r + b) / 2.0f;
     }
 
     colors[(int)(std::max_element(b_score, b_score + 4) - b_score)] = 'b';
@@ -171,11 +174,11 @@ void run_main_course() {
         ev3_lcd_draw_string(buf_bs[i], 90, 20 * (i + 1));
     }
 
-    ev3_speaker_play_tone(1000, 50);
-    while (!ev3_button_is_pressed(ENTER_BUTTON)) {
-        tslp_tsk(10 * 1000);
-    }
-    tslp_tsk(500 * 1000); // チャタリング防止と走行開始前のタメ
+    // ev3_speaker_play_tone(1000, 50);
+    // while (!ev3_button_is_pressed(ENTER_BUTTON)) {
+    //     tslp_tsk(10 * 1000);
+    // }
+    // tslp_tsk(500 * 1000); // チャタリング防止と走行開始前のタメ
     tslp_tsk(100 * 1000);
 
     char COLOR_ORDER[4] = {'g', 'b', 'y', 'r'};
@@ -185,7 +188,7 @@ void run_main_course() {
     for (int i = 0; i < 3; i++) {
         // オブジェクト入れる
         while (is_in_progress) {
-            tslp_tsk(1000*10);
+            tslp_tsk(1000*50);
         }
 
         catch_block();
@@ -202,14 +205,15 @@ void run_main_course() {
     act_tsk(RETURN_ARM);
 
     goal_pos = 3;
-    robot.straight_lines(ago_pos - goal_pos, abs(ago_pos - goal_pos) * LINE_INTERVAL + 48 - LINE_INTERVAL_START + 30,
-                            nullptr, 0.0f, 0.0f, -1.0f, false, 48 - LINE_INTERVAL_START + 30); // 30は微調整値
+    robot.straight_lines(ago_pos - goal_pos, abs(ago_pos - goal_pos) * LINE_INTERVAL,
+                            nullptr, 0.0f, 0.0f, -1.0f, true);
+    robot.straight(48 - LINE_INTERVAL_START);
     tslp_tsk(1000*50);
-    robot.turn(-90);
+    robot.turn(90);
     tslp_tsk(1000*50);
-    robot.straight_line(230, 0.0f, -1.0f, false, false, false, true);
+    robot.straight_line(-80, 0.0f, -1.0f, false, false, false, false, true);
     tslp_tsk(1000*50);
-    robot.straight(-250 / 2 + 48 - 4); // 4は微調整値
+    robot.straight(-250 / 2 + 48 - 8); // 8は微調整値
     tslp_tsk(1000*50);
     robot.turn(90);
 

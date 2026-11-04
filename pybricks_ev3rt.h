@@ -96,6 +96,7 @@ namespace pybricks {
         float straight_kd;
         // ★変更: 浮動小数点(float)に変更
         float config_tolerance;
+        float config_strict_tolerance;
         float config_target_val;
 
         bool drive_sync_initialized;
@@ -130,7 +131,7 @@ namespace pybricks {
         
         // ★変更: 第6引数 skip_initial_ignore を追加 (デフォルトは false)
         // ★変更: 第7引数 color_inversion を追加 (デフォルトは false)
-        void straight_line(float distance_mm = 0.0f, float speed_mm_per_sec = 0.0f, float target_val = -1.0f, bool skip_white_exit_check = false, bool reverse = false, bool skip_initial_ignore = false, bool color_inversion = false);
+        void straight_line(float distance_mm = 0.0f, float speed_mm_per_sec = 0.0f, float target_val = -1.0f, bool skip_white_exit_check = false, bool reverse = false, bool skip_initial_ignore = false, bool color_inversion = false, bool use_strict_tolerance = false);
         void straight_lines(int line_count, float distance_mm = 0.0f, void (*func)() = nullptr, float func_distance = 0.0f, float speed_mm_per_sec = 0.0f, float target_val = -1.0f, bool red_mind = false, float extra_straight = 0.0f);
         void stop();
         void brake();

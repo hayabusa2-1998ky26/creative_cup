@@ -7,18 +7,18 @@ namespace pybricks {
         // --- カラーセンサー キャリブレーション設定 ---
         // 先ほどのキャリブレーションコードで取得した値をここに入力します
         static constexpr int left_sensor_min = 4;
-        static constexpr int left_sensor_max = 55;
+        static constexpr int left_sensor_max = 59;
         static constexpr int right_sensor_min = 4;
-        static constexpr int right_sensor_max = 61;
+        static constexpr int right_sensor_max = 59;
 
         // 車輪の直径 (mm)
         static constexpr float wheel_diameter = 63.61f;
 
         // 車輪間の距離 / トレッド幅 (mm)
-        static constexpr float axle_track = 180.61f;
+        static constexpr float axle_track = 179.61f;
 
         // 制御周期 (ms) [例: 5.0f = 5ms (5,000us)]
-        static constexpr float period_ms = 10.0f;
+        static constexpr float period_ms = 13.0f;
 
         // 制御最小速度 (deg/s)
         static constexpr float min_speed = 30.0f;
@@ -54,7 +54,8 @@ namespace pybricks {
 
         // アライメント許容閾値 & 目標反射光値
         // 左右それぞれの正規化反射光の許容誤差
-        static constexpr float tolerance = 0.25f;
+        static constexpr float tolerance = 0.2f;
+        static constexpr float strict_tolerance = 0.12f;
         static constexpr float target_val = 0.5f;
 
         // ローパスフィルタのゲイン (1.0でフィルタなし、0.1などで強く平滑化)
