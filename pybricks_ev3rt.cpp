@@ -221,8 +221,9 @@ namespace pybricks {
     }
 
     void DriveBase::run_motors(float left_target, float right_target) {
-        left_motor->run((int)left_target);
-        right_motor->run((int)right_target);
+        // FF補正比率を乗算して各モーターに適用
+        left_motor->run((int)(left_target * DriveConfig::left_motor_scale));
+        right_motor->run((int)(right_target * DriveConfig::right_motor_scale));
     }
 
     float DriveBase::calculate_sync_p(int32_t left_moved, int32_t right_moved, bool is_turn) {

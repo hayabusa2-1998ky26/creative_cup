@@ -15,7 +15,11 @@ namespace pybricks {
         static constexpr float wheel_diameter = 63.24f; // 63.24
 
         // 車輪間の距離 / トレッド幅 (mm)
-        static constexpr float axle_track = 178.07f; // 180.07
+        static constexpr float axle_track = 180.07f; // 180.07
+
+        // モーターパワー補正比率（1.000f 以下）
+        static constexpr float left_motor_scale  = 1.000f;
+        static constexpr float right_motor_scale = 0.998f;
 
         // 制御周期 (ms) [例: 5.0f = 5ms (5,000us)]
         static constexpr float period_ms = 13.0f;

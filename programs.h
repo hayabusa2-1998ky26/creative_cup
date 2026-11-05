@@ -9,4 +9,6 @@ void run_calibration();
 
 void run_color_calibration();
 
+void run_motor_calibration();
+
 #endif // PROGRAMS_H
