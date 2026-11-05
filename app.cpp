@@ -30,12 +30,12 @@ void main_task(intptr_t unused) {
     ev3_color_sensor_get_rgb_raw(EV3_PORT_1, &rgb_val); // 空打ち
     tslp_tsk(1000*500);
 
-    ev3_sensor_config(EV3_PORT_1, NONE_SENSOR);
+    // ev3_sensor_config(EV3_PORT_1, NONE_SENSOR);
 
     robot = new pybricks::DriveBase(*left_motor, *right_motor, *left_sensor, *right_sensor);
 
-    run_main_course();
-    // run_calibration();
+    // run_main_course();
+    run_calibration();
     // run_color_calibration();
 
     ext_tsk();

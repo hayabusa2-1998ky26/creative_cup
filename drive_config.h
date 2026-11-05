@@ -55,7 +55,7 @@ namespace pybricks {
         // アライメント許容閾値 & 目標反射光値
         // 左右それぞれの正規化反射光の許容誤差
         static constexpr float tolerance = 0.2f;
-        static constexpr float strict_tolerance = 0.12f;
+        static constexpr float strict_tolerance = 0.13f;
         static constexpr float target_val = 0.5f;
 
         // ローパスフィルタのゲイン (1.0でフィルタなし、0.1などで強く平滑化)

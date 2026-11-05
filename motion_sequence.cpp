@@ -16,21 +16,19 @@ void catch_block() {
     rack_motor(-40, 20);
     delay();
     
-    catch_motor(-30, 100);
-    delay_little();
-    catch_motor(-60, 50);
+    catch_motor(-65, 50);
     delay_little();
     catch_motor(-80, 35);
     delay_little();
     catch_motor(-20, 10);
     delay();
 
-    rack_motor(-440, 100);
+    rack_motor(-450, 100);
     delay();
 
     catch_motor(80, 50);
     delay_little();
-    catch_motor(20, 20);
+    catch_motor(20, 30);
     delay();
 
     rack_motor(200, 100);
@@ -41,27 +39,28 @@ extern bool is_in_progress;
 void return_arm(intptr_t unused) {
     is_in_progress = true;
     delay();
-    rack_motor(350, 100);
+    rack_motor(360, 100);
     delay();
     // catch_motor(55, 100);
-    catch_motor(60 + 30 - 20, 100); // 20は余裕
+    catch_motor(65, 100);
 
-    act_tsk(INIT_ARM);
+    // act_tsk(INIT_ARM);
 
 
     // 処理完了後にタスクを自発的に終了する
+    is_in_progress = false;
     ext_tsk();
 }
 
 void init_arm(intptr_t unused) {
-
-    rack_motor_until_stalled(1, 5);
+    rack_motor_until_stalled(1, 10);
     delay();
     
-    catch_motor_until_stalled(1, 5);
+    catch_motor_until_stalled(1, 10);
     delay();
 
-    is_in_progress = false;
+
+
 
 
     // 処理完了後にタスクを自発的に終了する

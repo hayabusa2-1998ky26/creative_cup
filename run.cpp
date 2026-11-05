@@ -17,6 +17,7 @@ int rgbs[4][3];
 
 bool is_in_progress = false;
 
+using namespace pybricks;
 
 void color_reading() {
     ev3_speaker_play_tone(500, 50);
@@ -69,20 +70,13 @@ void run_main_course() {
 
     const float LINE_INTERVAL = 240.0;
     const float LINE_INTERVAL_START = 363.0;
-
-    // robot.straight_lines(-3, LINE_INTERVAL * 2 + LINE_INTERVAL_START - 20);
-    // robot.straight_line(-LINE_INTERVAL_START);
-
-    // ライントレースなどの処理を追加していく
     
-    // catch_motor(180, 100);
-    // catch_block();
-    // tslp_tsk(1000*3000);
-    // catch_block();
-    // tslp_tsk(1000*3000);
-    // catch_block();
-    // robot.straight_lines(4, LINE_INTERVAL * 3);
+    // tslp_tsk(1000*100);
+    // act_tsk(INIT_ARM);
     // tslp_tsk(1000000000);
+
+
+    // 開始
     robot.straight_line(330, 0.0f, -1.0f, false, false, false, false, true);
     tslp_tsk(1000 * 50);
 
@@ -91,38 +85,23 @@ void run_main_course() {
     
     robot.turn(90);
     tslp_tsk(1000*50);
-    robot.straight_lines(4, LINE_INTERVAL_START + LINE_INTERVAL * 3 - 80 + 40, &color_reading, 128, 0.0f, -1.0f, false); // 40は微調整値
+
+    // 色読み
+    robot.straight_lines(4, LINE_INTERVAL_START + LINE_INTERVAL * 3 - 80 + 40, Opt().on_line(&color_reading, 128).with_red_mind()); // 40は微調整値
     robot.straight(128);
     color_reading();
     // robot.straight_lines(4, LINE_INTERVAL_START + LINE_INTERVAL * 3 - 80 + 140 + 40, &color_reading, 128, 0.0f, -1.0f, true, 140); // 40は微調整値
-    
     tslp_tsk(1000*100);
     
-    robot.wide_forward(180, 208 / 2);
+    
+    // 下側に移動
+    robot.wide_forward(180, 206 / 2);
     ev3_sensor_config(EV3_PORT_4, NONE_SENSOR);
     ev3_sensor_config(EV3_PORT_1, COLOR_SENSOR);
-    
     act_tsk(INIT_ARM);
-    robot.straight_lines(4, LINE_INTERVAL * 3 - 80 + 128, nullptr, 0.0f, 0.0f, -1.0f, true);
+    robot.straight_lines(4, LINE_INTERVAL * 3 - 80 + 128, Opt().with_red_mind());
 
-    // // 画面表示用に文字列をフォーマット
-    // char buf_r[32], buf_g[32], buf_b[32];
-    // snprintf(buf_r, sizeof(buf_r), "R: %5d", rgbs[0][0]);
-    // snprintf(buf_g, sizeof(buf_g), "G: %5d", rgbs[0][1]);
-    // snprintf(buf_b, sizeof(buf_b), "B: %5d", rgbs[0][2]);
-    //
-    // // 画面を白でクリア
-    // ev3_lcd_fill_rect(0, 0, EV3_LCD_WIDTH, EV3_LCD_HEIGHT, EV3_LCD_WHITE);
-    //
-    // // 値をLCDに描画
-    // ev3_lcd_draw_string("RGB Raw Sensor", 0, 0);
-    // ev3_lcd_draw_string(buf_r, 0, 20);
-    // ev3_lcd_draw_string(buf_g, 0, 40);
-    // ev3_lcd_draw_string(buf_b, 0, 60);
-    //
-    // // ループが早すぎるのを防ぐため、100ms（100,000μs）待機
-    // tslp_tsk(100 * 1000);
-
+    // RGB値から色を推定
     char colors[4] = {' ', ' ', ' ', ' '};
     float y_score[4];
     float b_score[4];
@@ -150,29 +129,30 @@ void run_main_course() {
         }
     }
 
-    // 画面表示用に文字列をフォーマット
-    char buf_colors[4][2];
-    char buf_rs[4][4];
-    char buf_gs[4][4];
-    char buf_bs[4][4];
-    for (int i = 0; i < 4; i++) {
-        snprintf(buf_colors[i], sizeof(buf_colors[i]), "%1c", colors[i]);
-        snprintf(buf_rs[i], sizeof(buf_rs[i]), "%2d", rgbs[i][0]);
-        snprintf(buf_gs[i], sizeof(buf_gs[i]), "%2d", rgbs[i][1]);
-        snprintf(buf_bs[i], sizeof(buf_bs[i]), "%2d", rgbs[i][2]);
-    }
-
-    // 画面を白でクリア
-    ev3_lcd_fill_rect(0, 0, EV3_LCD_WIDTH, EV3_LCD_HEIGHT, EV3_LCD_WHITE);
-
-    // 値をLCDに描画
-    ev3_lcd_draw_string("RGB Raw Sensor", 0, 0);
-    for (int i = 0; i < 4; i++) {
-        ev3_lcd_draw_string(buf_colors[i], 0, 20 * (i + 1));
-        ev3_lcd_draw_string(buf_rs[i], 30, 20 * (i + 1));
-        ev3_lcd_draw_string(buf_gs[i], 60, 20 * (i + 1));
-        ev3_lcd_draw_string(buf_bs[i], 90, 20 * (i + 1));
-    }
+    // // 推定した色を表示
+    // char buf_colors[4][2];
+    // char buf_rs[4][4];
+    // char buf_gs[4][4];
+    // char buf_bs[4][4];
+    // for (int i = 0; i < 4; i++) {
+    //     snprintf(buf_colors[i], sizeof(buf_colors[i]), "%1c", colors[i]);
+    //     snprintf(buf_rs[i], sizeof(buf_rs[i]), "%2d", rgbs[i][0]);
+    //     snprintf(buf_gs[i], sizeof(buf_gs[i]), "%2d", rgbs[i][1]);
+    //     snprintf(buf_bs[i], sizeof(buf_bs[i]), "%2d", rgbs[i][2]);
+    // }
+    //
+    // // 画面を白でクリア
+    // ev3_lcd_fill_rect(0, 0, EV3_LCD_WIDTH, EV3_LCD_HEIGHT, EV3_LCD_WHITE);
+    //
+    // // 値をLCDに描画
+    // ev3_lcd_draw_string("RGB Raw Sensor", 0, 0);
+    // for (int i = 0; i < 4; i++) {
+    // is_in_progress = true;
+    //     ev3_lcd_draw_string(buf_colors[i], 0, 20 * (i + 1));
+    //     ev3_lcd_draw_string(buf_rs[i], 30, 20 * (i + 1));
+    //     ev3_lcd_draw_string(buf_gs[i], 60, 20 * (i + 1));
+    //     ev3_lcd_draw_string(buf_bs[i], 90, 20 * (i + 1));
+    // }
 
     // ev3_speaker_play_tone(1000, 50);
     // while (!ev3_button_is_pressed(ENTER_BUTTON)) {
@@ -180,7 +160,9 @@ void run_main_course() {
     // }
     // tslp_tsk(500 * 1000); // チャタリング防止と走行開始前のタメ
     tslp_tsk(100 * 1000);
+    
 
+    // オブジェクト処理
     char COLOR_ORDER[4] = {'g', 'b', 'y', 'r'};
     int ago_pos = 0;
     int goal_pos;
@@ -195,25 +177,30 @@ void run_main_course() {
         act_tsk(RETURN_ARM);
 
         goal_pos = find(COLOR_ORDER, colors[ago_pos]);
-        robot.straight_lines(ago_pos - goal_pos, abs(ago_pos - goal_pos) * LINE_INTERVAL,
-            nullptr, 0.0f, 0.0f, -1.0f, true);
+        robot.straight_lines(ago_pos - goal_pos, abs(ago_pos - goal_pos) * LINE_INTERVAL, Opt().with_red_mind().with_start_red_mind());
         
         ago_pos = goal_pos;
     }
 
+    // 最後のオブジェクトだけ別処理
     catch_block();
     act_tsk(RETURN_ARM);
 
     goal_pos = 3;
-    robot.straight_lines(ago_pos - goal_pos, abs(ago_pos - goal_pos) * LINE_INTERVAL,
-                            nullptr, 0.0f, 0.0f, -1.0f, true);
+    robot.straight_lines(ago_pos - goal_pos, abs(ago_pos - goal_pos) * LINE_INTERVAL, Opt().with_red_mind());
+    
+    // ゴール
     robot.straight(48 - LINE_INTERVAL_START);
     tslp_tsk(1000*50);
     robot.turn(90);
     tslp_tsk(1000*50);
     robot.straight_line(-80, 0.0f, -1.0f, false, false, false, false, true);
     tslp_tsk(1000*50);
-    robot.straight(-250 / 2 + 48 - 8); // 8は微調整値
+    
+    catch_motor(-20, 100);
+    rack_motor_until_stalled(1, 20);
+
+    robot.straight(-250 / 2 + 48 - 6); // 6は微調整値
     tslp_tsk(1000*50);
     robot.turn(90);
 

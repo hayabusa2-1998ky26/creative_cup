@@ -361,6 +361,26 @@ namespace pybricks {
         default_turn_accel = turn_acceleration;
     }
 
+    // ★追加: red_mind 処理の共通ヘルパー関数
+    void DriveBase::update_red_mind_pose(float remaining_dist_mm) {
+        rgb_raw_t rgb_val;
+        ev3_color_sensor_get_rgb_raw(EV3_PORT_1, &rgb_val);
+        float avg_gb = (rgb_val.g + rgb_val.b) / 2.0f;
+        
+        if (remaining_dist_mm < 0.0f) remaining_dist_mm = 0.0f;
+
+        float offset_angle_deg = 0.4f;
+        float offset_y = remaining_dist_mm * tanf(offset_angle_deg * (float)M_PI / 180.0f);
+        
+        if ((float)rgb_val.r < avg_gb * 1.6f) {
+            pose_y -= offset_y;
+            ev3_speaker_play_tone(500, 50);
+        } else {
+            pose_y += offset_y;
+            ev3_speaker_play_tone(2000, 50);
+        }
+    }
+
     void DriveBase::straight(float distance_mm, Stop then, bool wait) {
         if (fabsf(distance_mm) < 1.0f) return;
 
@@ -765,10 +785,18 @@ namespace pybricks {
     }
 
     // ★変更: 第8引数 extra_straight を追加
-    void DriveBase::straight_lines(int line_count, float distance_mm, void (*func)(), float func_distance, float speed_mm_per_sec, float target_val, bool red_mind, float extra_straight) {
+    void DriveBase::straight_lines(int line_count, float distance_mm, void (*func)(), float func_distance, float speed_mm_per_sec, float target_val, bool red_mind, float extra_straight, bool start_red_mind) {
         if (line_count == 0) return;
 
-        if (red_mind) {
+        if (red_mind || start_red_mind) {
+            rgb_raw_t dummy_rgb;
+            ev3_color_sensor_get_rgb_raw(EV3_PORT_1, &dummy_rgb);
+        }
+
+        // ★変更: start_red_mind が true の場合は開始時に位置調整を実施。そうでなく red_mind のみ true の場合は空打ち
+        if (start_red_mind) {
+            update_red_mind_pose(fabsf(distance_mm));
+        } else if (red_mind) {
             rgb_raw_t dummy_rgb;
             ev3_color_sensor_get_rgb_raw(EV3_PORT_1, &dummy_rgb);
         }
@@ -928,28 +956,10 @@ namespace pybricks {
                                     callback_start_deg = cur_forward;
                                 }
 
+                                // ★変更: 共通関数 update_red_mind_pose を呼び出し
                                 if (red_mind) {
-                                    rgb_raw_t rgb_val;
-                                    ev3_color_sensor_get_rgb_raw(EV3_PORT_1, &rgb_val);
-                                    float avg_gb = (rgb_val.g + rgb_val.b) / 2.0f;
-                                    
-                                    // 目標点までの残り距離を計算 (全体の目標距離 - オドメトリ上の進行距離)
                                     float remaining_dist_mm = fabsf(distance_mm) - total_moved_mm;
-                                    if (remaining_dist_mm < 0.0f) remaining_dist_mm = 0.0f;
-
-                                    // ずらしたい定数角度 (例: 1.5度。実機に合わせて調整してください)
-                                    float offset_angle_deg = 0.4f;
-                                    
-                                    // 残り距離と角度から、y方向のオフセット量を算出
-                                    float offset_y = remaining_dist_mm * tanf(offset_angle_deg * (float)M_PI / 180.0f);
-                                    
-                                    if ((float)rgb_val.r < avg_gb * 1.6f) {
-                                        pose_y -= offset_y;
-                                            ev3_speaker_play_tone(500, 50);
-                                    } else {
-                                        pose_y += offset_y;
-                                            ev3_speaker_play_tone(2000, 50);
-                                    }
+                                    update_red_mind_pose(remaining_dist_mm);
                                 } else {
                                     ev3_speaker_play_tone(1000, 50);
                                 }
@@ -1021,6 +1031,11 @@ namespace pybricks {
         }
 
         brake();
+    }
+
+    void DriveBase::straight_lines(int line_count, float distance_mm, const StraightLinesOptions& opt) {
+        straight_lines(line_count, distance_mm, opt.func, opt.func_distance, 
+                       opt.speed_mm_per_sec, opt.target_val, opt.red_mind, opt.extra_straight, opt.start_red_mind);
     }
 
     void DriveBase::drive(float speed_mm_per_sec, float turn_rate_deg_per_sec) {
