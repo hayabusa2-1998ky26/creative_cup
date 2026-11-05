@@ -12,10 +12,10 @@ namespace pybricks {
         static constexpr int right_sensor_max = 59;
 
         // 車輪の直径 (mm)
-        static constexpr float wheel_diameter = 63.61f;
+        static constexpr float wheel_diameter = 63.24f; // 63.24
 
         // 車輪間の距離 / トレッド幅 (mm)
-        static constexpr float axle_track = 179.61f;
+        static constexpr float axle_track = 178.07f; // 180.07
 
         // 制御周期 (ms) [例: 5.0f = 5ms (5,000us)]
         static constexpr float period_ms = 13.0f;

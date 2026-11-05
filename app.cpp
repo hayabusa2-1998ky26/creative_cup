@@ -34,8 +34,8 @@ void main_task(intptr_t unused) {
 
     robot = new pybricks::DriveBase(*left_motor, *right_motor, *left_sensor, *right_sensor);
 
-    // run_main_course();
-    run_calibration();
+    run_main_course();
+    // run_calibration();
     // run_color_calibration();
 
     ext_tsk();

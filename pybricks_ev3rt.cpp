@@ -361,24 +361,27 @@ namespace pybricks {
         default_turn_accel = turn_acceleration;
     }
 
-    // ★追加: red_mind 処理の共通ヘルパー関数
+    // ★姿勢角 (pose_theta) を直接補正するよう変更
     void DriveBase::update_red_mind_pose(float remaining_dist_mm) {
         rgb_raw_t rgb_val;
         ev3_color_sensor_get_rgb_raw(EV3_PORT_1, &rgb_val);
         float avg_gb = (rgb_val.g + rgb_val.b) / 2.0f;
-        
-        if (remaining_dist_mm < 0.0f) remaining_dist_mm = 0.0f;
 
-        float offset_angle_deg = 0.4f;
-        float offset_y = remaining_dist_mm * tanf(offset_angle_deg * (float)M_PI / 180.0f);
+        // 補正したい定数角度（度数法 -> ラジアン変換）
+        float offset_angle_deg = 3.0f; 
+        float offset_rad = offset_angle_deg * (float)M_PI / 180.0f;
         
         if ((float)rgb_val.r < avg_gb * 1.6f) {
-            pose_y -= offset_y;
+            pose_theta -= offset_rad;
             ev3_speaker_play_tone(500, 50);
         } else {
-            pose_y += offset_y;
+            pose_theta += offset_rad;
             ev3_speaker_play_tone(2000, 50);
         }
+
+        // 姿勢角を -π ～ +π の範囲に正規化
+        while (pose_theta > M_PI)  pose_theta -= 2.0f * (float)M_PI;
+        while (pose_theta < -M_PI) pose_theta += 2.0f * (float)M_PI;
     }
 
     void DriveBase::straight(float distance_mm, Stop then, bool wait) {

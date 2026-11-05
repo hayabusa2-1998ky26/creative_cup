@@ -73,6 +73,7 @@ void run_main_course() {
     
     // tslp_tsk(1000*100);
     // act_tsk(INIT_ARM);
+    // robot.straight_lines(4, LINE_INTERVAL * 3 - 80 + 128, Opt().with_red_mind());
     // tslp_tsk(1000000000);
 
 
@@ -95,9 +96,10 @@ void run_main_course() {
     
     
     // 下側に移動
+    robot.straight(50);
     robot.wide_forward(180, 206 / 2);
     ev3_sensor_config(EV3_PORT_4, NONE_SENSOR);
-    ev3_sensor_config(EV3_PORT_1, COLOR_SENSOR);
+    // ev3_sensor_config(EV3_PORT_1, COLOR_SENSOR);
     act_tsk(INIT_ARM);
     robot.straight_lines(4, LINE_INTERVAL * 3 - 80 + 128, Opt().with_red_mind());
 
@@ -118,6 +120,7 @@ void run_main_course() {
     }
 
     colors[(int)(std::max_element(b_score, b_score + 4) - b_score)] = 'b';
+    n_score[(int)(std::max_element(b_score, b_score + 4) - b_score)] = 999;
     colors[(int)(std::min_element(n_score, n_score + 4) - n_score)] = 'n';
     y_score[(int)(std::max_element(b_score, b_score + 4) - b_score)] = 0;
     y_score[(int)(std::min_element(n_score, n_score + 4) - n_score)] = 0;
@@ -153,7 +156,7 @@ void run_main_course() {
     //     ev3_lcd_draw_string(buf_gs[i], 60, 20 * (i + 1));
     //     ev3_lcd_draw_string(buf_bs[i], 90, 20 * (i + 1));
     // }
-
+    //
     // ev3_speaker_play_tone(1000, 50);
     // while (!ev3_button_is_pressed(ENTER_BUTTON)) {
     //     tslp_tsk(10 * 1000);
@@ -197,10 +200,10 @@ void run_main_course() {
     robot.straight_line(-80, 0.0f, -1.0f, false, false, false, false, true);
     tslp_tsk(1000*50);
     
-    catch_motor(-20, 100);
+    catch_motor(-5, 100);
     rack_motor_until_stalled(1, 20);
 
-    robot.straight(-250 / 2 + 48 - 6); // 6は微調整値
+    robot.straight(-250 / 2 + 48 - 4); // 最後の値は微調整値
     tslp_tsk(1000*50);
     robot.turn(90);
 

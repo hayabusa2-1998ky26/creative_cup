@@ -16,7 +16,7 @@ void catch_block() {
     rack_motor(-40, 20);
     delay();
     
-    catch_motor(-65, 50);
+    catch_motor(-55, 50);
     delay_little();
     catch_motor(-80, 35);
     delay_little();
@@ -42,7 +42,7 @@ void return_arm(intptr_t unused) {
     rack_motor(360, 100);
     delay();
     // catch_motor(55, 100);
-    catch_motor(65, 100);
+    catch_motor(55, 100);
 
     // act_tsk(INIT_ARM);
 
@@ -58,6 +58,8 @@ void init_arm(intptr_t unused) {
     
     catch_motor_until_stalled(1, 10);
     delay();
+
+    catch_motor(-10, 100);
 
 
 
