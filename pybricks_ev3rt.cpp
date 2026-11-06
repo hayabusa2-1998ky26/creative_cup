@@ -369,7 +369,7 @@ namespace pybricks {
         float avg_gb = (rgb_val.g + rgb_val.b) / 2.0f;
 
         // 補正したい定数角度（度数法 -> ラジアン変換）
-        float offset_angle_deg = 3.0f; 
+        float offset_angle_deg = 8.0f; 
         float offset_rad = offset_angle_deg * (float)M_PI / 180.0f;
         
         if ((float)rgb_val.r < avg_gb * 1.6f) {

@@ -11,7 +11,7 @@ void delay_little() {
 }
 
 void catch_block() {
-    rack_motor(-80, 100);
+    rack_motor(-90, 100);
     delay_little();
     rack_motor(-40, 20);
     delay();
@@ -23,7 +23,7 @@ void catch_block() {
     catch_motor(-20, 10);
     delay();
 
-    rack_motor(-450, 100);
+    rack_motor(-440, 100);
     delay();
 
     catch_motor(80, 50);

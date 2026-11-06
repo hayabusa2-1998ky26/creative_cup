@@ -81,10 +81,10 @@ void run_main_course() {
     robot.straight_line(330, 0.0f, -1.0f, false, false, false, false, true);
     tslp_tsk(1000 * 50);
 
-    robot.straight(15);
+    robot.straight(18);
     tslp_tsk(1000 * 50);
     
-    robot.turn(90);
+    robot.turn(87);
     tslp_tsk(1000*50);
 
     // 色読み
