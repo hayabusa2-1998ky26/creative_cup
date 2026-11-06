@@ -4,6 +4,7 @@
 
 // 本番走行プログラム
 void run_main_course();
+void run_line_test();
 
 void run_calibration();
 

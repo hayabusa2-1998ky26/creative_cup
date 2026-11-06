@@ -133,6 +133,8 @@ namespace pybricks {
         float pose_theta; 
         float heading_prev_error;
         bool heading_pd_initialized;
+        float reverse_heading_derivative;
+        float reverse_heading_output;
         int32_t prev_left_enc;
         int32_t prev_right_enc;
 

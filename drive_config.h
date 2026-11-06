@@ -39,6 +39,14 @@ namespace pybricks {
         // 後退時も途中のラインから初期姿勢の傾きを補正する。
         static constexpr bool reverse_line_heading_correction = true;
 
+        // Reverse line crossings: limit encoder-noise response and abrupt steering.
+        static constexpr float reverse_heading_kp = 1.8f;
+        static constexpr float reverse_heading_kd = 0.04f;
+        static constexpr float reverse_heading_limit = 0.20f;
+        static constexpr float reverse_heading_filter_s = 0.05f;
+        static constexpr float reverse_heading_slew_per_s = 1.5f;
+        static constexpr float reverse_left_power_scale = 0.98f;
+
         // デフォルト直進速度・加速度 (mm/s, mm/s^2)
         static constexpr float straight_speed = 600.0f;
         static constexpr float straight_accel = 1200.0f;

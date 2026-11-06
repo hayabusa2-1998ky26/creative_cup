@@ -22,6 +22,7 @@ extern "C" {
 #ifndef TOPPERS_MACRO_ONLY
 
 extern void main_task(intptr_t exinf);
+extern void line_test_task(intptr_t exinf);
 extern void return_arm(intptr_t exinf);
 extern void init_arm(intptr_t exinf);
 

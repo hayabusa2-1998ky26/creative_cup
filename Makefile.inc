@@ -1,4 +1,5 @@
 APPL_COBJS += 
+APPL_CXXOBJS += line_test.o
 
 # 1. ここには「メインファイル（app）」以外を、拡張子「.o」のまま指定します
 APPL_CXXOBJS += pybricks_ev3rt.o run.o all_calibration.o color_calibration.o motor_calibration.o motion_sequence.o motor_control.o

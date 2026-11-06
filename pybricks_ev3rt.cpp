@@ -214,6 +214,8 @@ namespace pybricks {
         pose_theta = 0.0f;
         heading_prev_error = 0.0f;
         heading_pd_initialized = false;
+        reverse_heading_derivative = 0.0f;
+        reverse_heading_output = 0.0f;
         prev_left_enc = 0;
         prev_right_enc = 0;
 
@@ -270,6 +272,8 @@ namespace pybricks {
         pose_theta = 0.0f;
         heading_prev_error = 0.0f;
         heading_pd_initialized = false;
+        reverse_heading_derivative = 0.0f;
+        reverse_heading_output = 0.0f;
         prev_left_enc = left_motor->angle();
         prev_right_enc = right_motor->angle();
     }
@@ -318,21 +322,37 @@ namespace pybricks {
         float dt = control_period_ms / 1000.0f;
         if (dt <= 0.0f) dt = 0.010f;
 
-        const float Kp = 2.0f;   
-        const float Kd = 0.1f;   
+        const bool reverse_lines = dir < 0.0f && heading_only;
+        const float Kp = reverse_lines ? DriveConfig::reverse_heading_kp : 2.0f;
+        const float Kd = reverse_lines ? DriveConfig::reverse_heading_kd : 0.1f;
 
         float error_delta = error_theta - heading_prev_error;
         while (error_delta > M_PI) error_delta -= 2.0f * (float)M_PI;
         while (error_delta < -M_PI) error_delta += 2.0f * (float)M_PI;
         float derivative = heading_pd_initialized ? error_delta / dt : 0.0f;
+        if (reverse_lines) {
+            if (!heading_pd_initialized) reverse_heading_derivative = 0.0f;
+            float alpha = dt / (DriveConfig::reverse_heading_filter_s + dt);
+            reverse_heading_derivative += alpha * (derivative - reverse_heading_derivative);
+            derivative = reverse_heading_derivative;
+        }
         heading_prev_error = error_theta;
         heading_pd_initialized = true;
 
         float u = (Kp * error_theta) + (Kd * derivative);
 
-        const float MAX_U = 0.30f;
+        const float MAX_U = reverse_lines ? DriveConfig::reverse_heading_limit : 0.30f;
         if (u > MAX_U)  u = MAX_U;
         if (u < -MAX_U) u = -MAX_U;
+
+        if (reverse_lines) {
+            float step = DriveConfig::reverse_heading_slew_per_s * dt;
+            u = fmaxf(reverse_heading_output - step, fminf(reverse_heading_output + step, u));
+            reverse_heading_output = u;
+        } else {
+            reverse_heading_derivative = 0.0f;
+            reverse_heading_output = 0.0f;
+        }
 
         return u;
     }
@@ -346,6 +366,10 @@ namespace pybricks {
 
         float left_target  = base_speed - turn_power;
         float right_target = base_speed + turn_power;
+
+        if (base_speed < 0.0f && heading_only) {
+            left_target *= DriveConfig::reverse_left_power_scale;
+        }
 
         run_motors(left_target, right_target);
     }
