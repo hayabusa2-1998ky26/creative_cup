@@ -6,3 +6,6 @@ APPL_CXXOBJS += pybricks_ev3rt.o run.o all_calibration.o color_calibration.o mot
 # 2. メイン言語が C++ であることを指定（これにより app.cpp が自動でコンパイルされます）
 SRCLANG := c++
 
+# Initialize the PIC base per function instead of relying on task-entry r9.
+COPTS += -mno-single-pic-base
+

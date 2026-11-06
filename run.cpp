@@ -1,9 +1,10 @@
+// Read C++ standard headers before EV3RT defines its alignof macro.
+#include <algorithm>
 #include "ev3api.h"
 #include "pybricks_ev3rt.h"
 #include "programs.h"
 #include "motion_sequence.h"
 #include "motor_control.h"
-#include <algorithm>
 
 // すべてポインタ（*）に変更します
 extern pybricks::DriveBase* robot;
