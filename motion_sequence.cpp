@@ -10,28 +10,38 @@ void delay_little() {
     tslp_tsk(1000*5);
 }
 
+extern bool is_last_red;
+
 void catch_block() {
-    rack_motor(-90, 100);
+    if (is_last_red) {
+        rack_motor(-70, 100);
+    } else {
+        rack_motor(-90, 100);
+    }
     delay_little();
-    rack_motor(-40, 20);
+    rack_motor(-50, 20);
     delay();
     
-    catch_motor(-55, 50);
+    catch_motor(-65, 50);
     delay_little();
     catch_motor(-80, 35);
     delay_little();
     catch_motor(-20, 10);
     delay();
 
-    rack_motor(-440, 100);
+    rack_motor(-430, 100);
     delay();
 
-    catch_motor(80, 50);
+    catch_motor(85, 50);
     delay_little();
     catch_motor(20, 30);
     delay();
-
-    rack_motor(200, 100);
+    
+    if (is_last_red) {
+        rack_motor(180, 100);
+    } else {
+        rack_motor(200, 100);
+    }
 }
 
 extern bool is_in_progress;
@@ -39,10 +49,10 @@ extern bool is_in_progress;
 void return_arm(intptr_t unused) {
     is_in_progress = true;
     delay();
-    rack_motor(360, 100);
+    rack_motor(370, 100);
     delay();
     // catch_motor(55, 100);
-    catch_motor(55, 100);
+    catch_motor(60, 100);
 
     // act_tsk(INIT_ARM);
 
@@ -56,10 +66,10 @@ void init_arm(intptr_t unused) {
     rack_motor_until_stalled(1, 10);
     delay();
     
-    catch_motor_until_stalled(1, 10);
+    catch_motor_until_stalled(1, 15);
     delay();
 
-    catch_motor(-10, 100);
+    catch_motor(-40, 100);
 
 
 

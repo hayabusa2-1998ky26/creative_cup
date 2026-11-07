@@ -142,8 +142,8 @@ namespace pybricks {
         void update_odometry(int32_t cur_left, int32_t cur_right);
         float calculate_lookahead_heading_pd(float lookahead_dist_mm, float dir = 1.0f, bool heading_only = false);
         void run_straight_sync(float base_speed, int32_t cur_left, int32_t cur_right, float lookahead_dist = 80.0f, bool heading_only = false);
-        void update_red_mind_pose(float remaining_dist_mm);
-
+        // pybricks_ev3rt.h の DriveBase クラス内
+        bool update_red_mind_pose(float remaining_dist_mm, float dir = 1.0f);
     public:
         DriveBase(Motor& left, Motor& right, ColorSensor& left_sens, ColorSensor& right_sens);
 
@@ -158,8 +158,8 @@ namespace pybricks {
         // ★変更: 第6引数 skip_initial_ignore を追加 (デフォルトは false)
         // ★変更: 第7引数 color_inversion を追加 (デフォルトは false)
         void straight_line(float distance_mm = 0.0f, float speed_mm_per_sec = 0.0f, float target_val = -1.0f, bool skip_white_exit_check = false, bool reverse = false, bool skip_initial_ignore = false, bool color_inversion = false, bool use_strict_tolerance = false);
-        void straight_lines(int line_count, float distance_mm = 0.0f, void (*func)() = nullptr, float func_distance = 0.0f, float speed_mm_per_sec = 0.0f, float target_val = -1.0f, bool red_mind = false, float extra_straight = 0.0f, bool start_red_mind = false);// ★追加: 第一・第二引数を必須とし、オプションを Opt 構造体で受けるオーバーロード
-        void straight_lines(int line_count, float distance_mm, const StraightLinesOptions& opt = StraightLinesOptions());
+        bool straight_lines(int line_count, float distance_mm = 0.0f, void (*func)() = nullptr, float func_distance = 0.0f, float speed_mm_per_sec = 0.0f, float target_val = -1.0f, bool red_mind = false, float extra_straight = 0.0f, bool start_red_mind = false);// ★追加: 第一・第二引数を必須とし、オプションを Opt 構造体で受けるオーバーロード
+        bool straight_lines(int line_count, float distance_mm, const StraightLinesOptions& opt = StraightLinesOptions());
         void stop();
         void brake();
     };

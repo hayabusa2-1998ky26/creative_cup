@@ -240,9 +240,9 @@ namespace pybricks {
         float dt = control_period_ms / 1000.0f;
         if (dt <= 0.0f) dt = 0.010f;
 
-        const float Kp = 1.50f;  
-        const float Ki = 0.05f;  
-        const float Kd = 0.2f;  
+        const float Kp = 1.50f;
+        const float Ki = 0.05f;
+        const float Kd = 0.37f;
 
         float p_term = Kp * diff;
 
@@ -362,27 +362,43 @@ namespace pybricks {
         default_turn_accel = turn_acceleration;
     }
 
-    // ★姿勢角 (pose_theta) を直接補正するよう変更
-    void DriveBase::update_red_mind_pose(float remaining_dist_mm) {
+    bool DriveBase::update_red_mind_pose(float remaining_dist_mm, float dir) {
         rgb_raw_t rgb_val;
         ev3_color_sensor_get_rgb_raw(EV3_PORT_1, &rgb_val);
         float avg_gb = (rgb_val.g + rgb_val.b) / 2.0f;
 
-        // 補正したい定数角度（度数法 -> ラジアン変換）
-        float offset_angle_deg = 8.0f; 
-        float offset_rad = offset_angle_deg * (float)M_PI / 180.0f;
         
-        if ((float)rgb_val.r < avg_gb * 1.6f) {
-            pose_theta -= offset_rad;
-            ev3_speaker_play_tone(500, 50);
+        float offset;
+        // ★追加: バック時(dir < 0)は、姿勢角を騙した結果として生じる「横シフト」が逆になるため補正の符号を反転する
+        float sign = (dir >= 0.0f) ? 1.0f : -1.0f;
+
+        // 赤色検知フラグ
+        bool is_red = ((float)rgb_val.r >= avg_gb * 1.6f);
+
+        if (dir >= 0.0f) {
+            if ((float)rgb_val.r < avg_gb * 1.6f) {
+                offset = -1.3f;
+                ev3_speaker_play_tone(500, 50);
+            } else {
+                offset = 1.0f;
+                ev3_speaker_play_tone(2000, 50);
+            }
         } else {
-            pose_theta += offset_rad;
-            ev3_speaker_play_tone(2000, 50);
+            if ((float)rgb_val.r < avg_gb * 1.6f) {
+                offset = 0.3f;
+                ev3_speaker_play_tone(500, 50);
+            } else {
+                offset = 2.0f;
+                ev3_speaker_play_tone(2000, 50);
+            } // -9.3, 5.5, -13.0, 10.0
         }
 
-        // 姿勢角を -π ～ +π の範囲に正規化
+        pose_theta += offset * sign * (float)M_PI / 180.0f;
+
         while (pose_theta > M_PI)  pose_theta -= 2.0f * (float)M_PI;
         while (pose_theta < -M_PI) pose_theta += 2.0f * (float)M_PI;
+
+        return is_red;
     }
 
     void DriveBase::straight(float distance_mm, Stop then, bool wait) {
@@ -399,9 +415,9 @@ namespace pybricks {
 
         reset_odometry();
 
-        ev3_lcd_set_font(EV3_FONT_MEDIUM);
-        ev3_lcd_fill_rect(0, 0, EV3_LCD_WIDTH, EV3_LCD_HEIGHT, EV3_LCD_WHITE);
-        ev3_lcd_draw_string("STRAIGHT MONITOR", 0, 0);
+        // ev3_lcd_set_font(EV3_FONT_MEDIUM);
+        // ev3_lcd_fill_rect(0, 0, EV3_LCD_WIDTH, EV3_LCD_HEIGHT, EV3_LCD_WHITE);
+        // ev3_lcd_draw_string("STRAIGHT MONITOR", 0, 0);
 
         float dir = (distance_mm >= 0) ? 1.0f : -1.0f;
 
@@ -425,14 +441,14 @@ namespace pybricks {
                 max_abs_diff = abs_diff;
             }
 
-            char buf1[32], buf2[32], buf3[32];
-            snprintf(buf1, sizeof(buf1), "L_deg: %ld deg", (long)left_moved);
-            snprintf(buf2, sizeof(buf2), "R_deg: %ld deg", (long)right_moved);
-            snprintf(buf3, sizeof(buf3), "MaxDiff: %ld deg", (long)max_abs_diff);
-
-            ev3_lcd_draw_string(buf1, 0, 25);
-            ev3_lcd_draw_string(buf2, 0, 45);
-            ev3_lcd_draw_string(buf3, 0, 65);
+            // char buf1[32], buf2[32], buf3[32];
+            // snprintf(buf1, sizeof(buf1), "L_deg: %ld deg", (long)left_moved);
+            // snprintf(buf2, sizeof(buf2), "R_deg: %ld deg", (long)right_moved);
+            // snprintf(buf3, sizeof(buf3), "MaxDiff: %ld deg", (long)max_abs_diff);
+            //
+            // ev3_lcd_draw_string(buf1, 0, 25);
+            // ev3_lcd_draw_string(buf2, 0, 45);
+            // ev3_lcd_draw_string(buf3, 0, 65);
 
             float remaining_deg = target_deg - avg_moved;
             if (remaining_deg <= 0) break;
@@ -788,28 +804,28 @@ namespace pybricks {
         brake();
     }
 
-    // ★変更: 第8引数 extra_straight を追加
-    void DriveBase::straight_lines(int line_count, float distance_mm, void (*func)(), float func_distance, float speed_mm_per_sec, float target_val, bool red_mind, float extra_straight, bool start_red_mind) {
-        if (line_count == 0) return;
+    bool DriveBase::straight_lines(int line_count, float distance_mm, void (*func)(), float func_distance, float speed_mm_per_sec, float target_val, bool red_mind, float extra_straight, bool start_red_mind) {
+        if (line_count == 0) return false;
+
+        bool last_red_detected = false; // ★最後に赤を読んだかのフラグ
+
+        float dir = (line_count > 0) ? 1.0f : -1.0f;
+        int target_lines = abs(line_count);
 
         if (red_mind || start_red_mind) {
             rgb_raw_t dummy_rgb;
             ev3_color_sensor_get_rgb_raw(EV3_PORT_1, &dummy_rgb);
         }
 
-        // ★変更: start_red_mind が true の場合は開始時に位置調整を実施。そうでなく red_mind のみ true の場合は空打ち
+        // メソッド開始時の赤判定
         if (start_red_mind) {
-            update_red_mind_pose(fabsf(distance_mm));
+            last_red_detected = update_red_mind_pose(fabsf(distance_mm), dir);
         } else if (red_mind) {
             rgb_raw_t dummy_rgb;
             ev3_color_sensor_get_rgb_raw(EV3_PORT_1, &dummy_rgb);
         }
 
-        float dir = (line_count > 0) ? 1.0f : -1.0f;
-        int target_lines = abs(line_count);
-
         float target = (target_val < 0.0f) ? config_target_val : target_val;
-        
         float run_speed_mm = (speed_mm_per_sec <= 0.0f) ? DriveConfig::straight_speed : speed_mm_per_sec;
 
         float dt = control_period_ms / 1000.0f;
@@ -817,13 +833,10 @@ namespace pybricks {
 
         float wheel_circ = wheel_diameter * M_PI;
         float target_run_speed = (run_speed_mm / wheel_circ) * 360.0f;
-        
         float accel = (DriveConfig::straight_accel / wheel_circ) * 360.0f;
         float target_deg = fabsf((distance_mm / wheel_circ) * 360.0f);
 
         float extra_reverse_target_deg = (20.0f / wheel_circ) * 360.0f;
-        
-        // ★修正: extra_straight はマイナスで渡されることがあるため、fabsfで絶対値を取得する
         float extra_straight_target_deg = (fabsf(extra_straight) / wheel_circ) * 360.0f;
         bool wait_for_extra_straight = false;
         int32_t extra_straight_start_deg = 0;
@@ -865,11 +878,9 @@ namespace pybricks {
             int32_t cur_right_total = right_motor->angle();
             int32_t cur_forward = (cur_left_total + cur_right_total) / 2;
             
-            // ★追加・修正: extra_straight 分の距離に達したかの判定（後退時も絶対値で正しく測られます）
             if (wait_for_extra_straight) {
                 float extra_moved_deg = fabsf((float)(cur_forward - extra_straight_start_deg));
                 if (extra_moved_deg >= extra_straight_target_deg) {
-                    // ★追加: 停止条件を満たした時点で func が未実行なら確実に発火させる
                     if (callback_pending && func != nullptr) {
                         func();
                         callback_pending = false;
@@ -907,7 +918,7 @@ namespace pybricks {
                     float extra_moved_deg = fabsf((float)(cur_forward - extra_reverse_start_deg));
                     if (extra_moved_deg >= extra_reverse_target_deg) {
                         straight_line(0.0f, run_speed_mm, target, true, false, true, false, false);
-                        return;
+                        return last_red_detected; // ★離脱時
                     }
                 } else {
                     if (!white_exit_initialized) {
@@ -935,8 +946,6 @@ namespace pybricks {
                             last_line_detected_l = cur_left_total;
                             last_line_detected_r = cur_right_total;
 
-
-                            // ★修正: 誤差を考慮し、extra_straight が「指定されていない(0.0f)」かどうかの判定を厳格化
                             if (crossed_lines >= target_lines && fabsf(extra_straight) < 0.001f) {
                                 bool is_reverse = (dir < 0.0f);
                                 ev3_speaker_play_tone(1000, 50);
@@ -946,10 +955,9 @@ namespace pybricks {
                                     extra_reverse_start_deg = cur_forward;
                                 } else {
                                     straight_line(0.0f, run_speed_mm, target, true, is_reverse, true);
-                                    return;
+                                    return last_red_detected; // ★離脱時
                                 }
                             } else {
-                                // ★修正: マイナス値でもこのブロックに入り、追加の直進待機フラグが立つ
                                 if (crossed_lines >= target_lines) {
                                     wait_for_extra_straight = true;
                                     extra_straight_start_deg = cur_forward;
@@ -960,10 +968,10 @@ namespace pybricks {
                                     callback_start_deg = cur_forward;
                                 }
 
-                                // ★変更: 共通関数 update_red_mind_pose を呼び出し
+                                // 途中のライン検知時に赤色判定を更新
                                 if (red_mind) {
                                     float remaining_dist_mm = fabsf(distance_mm) - total_moved_mm;
-                                    update_red_mind_pose(remaining_dist_mm);
+                                    last_red_detected = update_red_mind_pose(remaining_dist_mm, dir);
                                 } else {
                                     ev3_speaker_play_tone(1000, 50);
                                 }
@@ -994,20 +1002,26 @@ namespace pybricks {
                                 r_exit_deg = cur_forward;
                             }
 
+                            // 左右センサーが黒線を抜け出て、pose_theta が確定したタイミング
                             if (!l_on_black && !r_on_black && l_exit_deg != 0 && r_exit_deg != 0) {
                                 int32_t l_center = (l_enter_deg + l_exit_deg) / 2;
                                 int32_t r_center = (r_enter_deg + r_exit_deg) / 2;
-
                                 int32_t center_diff = l_center - r_center;
                                 float center_diff_mm = ((float)center_diff / 360.0f) * (wheel_diameter * (float)M_PI);
-
                                 float sensor_width_total = 2.0f * sensor_x;
 
                                 bool use_line_heading = dir > 0.0f || DriveConfig::reverse_line_heading_correction;
                                 if (use_line_heading && sensor_width_total > 0.0f) {
                                     update_odometry(cur_left_total, cur_right_total);
+                                    // 1. 黒線による姿勢角確定
                                     pose_theta = atanf(center_diff_mm / sensor_width_total);
                                     heading_pd_initialized = false;
+                                    
+                                    // 2. 黒線アライメント確定後に赤線補正を上乗せ適用する
+                                    if (red_mind) {
+                                        float remaining_dist_mm = fabsf(distance_mm) - total_moved_mm;
+                                        last_red_detected = update_red_mind_pose(remaining_dist_mm, dir);
+                                    }
                                 }
 
                                 align_processing = false;
@@ -1035,11 +1049,13 @@ namespace pybricks {
         }
 
         brake();
+        return last_red_detected; // ★正常終了時に最後に判定した結果を返す
     }
 
-    void DriveBase::straight_lines(int line_count, float distance_mm, const StraightLinesOptions& opt) {
-        straight_lines(line_count, distance_mm, opt.func, opt.func_distance, 
-                       opt.speed_mm_per_sec, opt.target_val, opt.red_mind, opt.extra_straight, opt.start_red_mind);
+    // Opt構造体ラッパー
+    bool DriveBase::straight_lines(int line_count, float distance_mm, const StraightLinesOptions& opt) {
+        return straight_lines(line_count, distance_mm, opt.func, opt.func_distance, 
+                             opt.speed_mm_per_sec, opt.target_val, opt.red_mind, opt.extra_straight, opt.start_red_mind);
     }
 
     void DriveBase::drive(float speed_mm_per_sec, float turn_rate_deg_per_sec) {

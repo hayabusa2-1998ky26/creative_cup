@@ -16,6 +16,8 @@ pybricks::DriveBase* robot;
 // メインタスク
 // =========================================================
 void main_task(intptr_t unused) {
+    ev3_speaker_play_tone(500, 50);
+    tslp_tsk(1000*500);
     left_motor   = new pybricks::Motor(EV3_PORT_B, pybricks::Direction::COUNTERCLOCKWISE);
     right_motor  = new pybricks::Motor(EV3_PORT_C, pybricks::Direction::CLOCKWISE);
 

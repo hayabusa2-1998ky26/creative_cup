@@ -16,6 +16,7 @@ sensor_port_t color_sensor_port = EV3_PORT_4;
 int rgbs[4][3];
 
 bool is_in_progress = false;
+bool is_last_red = false;
 
 using namespace pybricks;
 
@@ -58,12 +59,12 @@ void run_main_course() {
     // Enterボタンが押されるまで待機
     ev3_speaker_play_tone(1000, 50);
     while (!ev3_button_is_pressed(ENTER_BUTTON)) {
-        tslp_tsk(10 * 1000);
+        tslp_tsk(50 * 1000);
     }
     tslp_tsk(500 * 1000); // チャタリング防止と走行開始前のタメ
     
-    ev3_lcd_fill_rect(0, 0, EV3_LCD_WIDTH, EV3_LCD_HEIGHT, EV3_LCD_WHITE);
-    ev3_lcd_draw_string("Main Course Start", 0, 0);
+    // ev3_lcd_fill_rect(0, 0, EV3_LCD_WIDTH, EV3_LCD_HEIGHT, EV3_LCD_WHITE);
+    // ev3_lcd_draw_string("Main Course Start", 0, 0);
 
     // ★ 左右対称の設計に基づき、X座標（絶対値）とY座標の2つだけを渡す
     robot.set_sensor_coordinates(72.0f, 48.0f);
@@ -74,17 +75,34 @@ void run_main_course() {
     // tslp_tsk(1000*100);
     // act_tsk(INIT_ARM);
     // robot.straight_lines(4, LINE_INTERVAL * 3 - 80 + 128, Opt().with_red_mind());
+    // act_tsk(INIT_ARM);
+    // tslp_tsk(1000*1000*5);
+    // while (1) {
+    //     catch_block();
+    //     act_tsk(RETURN_ARM);
+    //     tslp_tsk(1000*1000);
+    // }
     // tslp_tsk(1000000000);
 
 
     // 開始
+    ev3_speaker_play_tone(1000, 50);
+    tslp_tsk(1000*50);
+    act_tsk(INIT_ARM);
+    // Enterボタンが押されるまで待機
+    ev3_speaker_play_tone(1000, 50);
+    while (!ev3_button_is_pressed(ENTER_BUTTON)) {
+        tslp_tsk(50 * 1000);
+    }
+    tslp_tsk(500 * 1000); // チャタリング防止と走行開始前のタメ
+    tslp_tsk(1000*50);
     robot.straight_line(330, 0.0f, -1.0f, false, false, false, false, true);
-    tslp_tsk(1000 * 50);
+    tslp_tsk(1000 * 100);
 
-    robot.straight(18);
-    tslp_tsk(1000 * 50);
+    robot.straight(15);
+    tslp_tsk(1000 * 100);
     
-    robot.turn(87);
+    robot.turn(88);
     tslp_tsk(1000*50);
 
     // 色読み
@@ -96,12 +114,11 @@ void run_main_course() {
     
     
     // 下側に移動
-    robot.straight(50);
+
     robot.wide_forward(180, 206 / 2);
     ev3_sensor_config(EV3_PORT_4, NONE_SENSOR);
     // ev3_sensor_config(EV3_PORT_1, COLOR_SENSOR);
-    act_tsk(INIT_ARM);
-    robot.straight_lines(4, LINE_INTERVAL * 3 - 80 + 128, Opt().with_red_mind());
+    is_last_red = robot.straight_lines(4, LINE_INTERVAL * 3 - 80 + 128, Opt().with_red_mind());
 
     // RGB値から色を推定
     char colors[4] = {' ', ' ', ' ', ' '};
@@ -177,16 +194,19 @@ void run_main_course() {
         }
 
         catch_block();
+        tslp_tsk(1000*20);
         act_tsk(RETURN_ARM);
+        tslp_tsk(1000*20);
 
         goal_pos = find(COLOR_ORDER, colors[ago_pos]);
-        robot.straight_lines(ago_pos - goal_pos, abs(ago_pos - goal_pos) * LINE_INTERVAL, Opt().with_red_mind().with_start_red_mind());
+        is_last_red = robot.straight_lines(ago_pos - goal_pos, abs(ago_pos - goal_pos) * LINE_INTERVAL, Opt().with_red_mind().with_start_red_mind());
         
         ago_pos = goal_pos;
     }
 
     // 最後のオブジェクトだけ別処理
     catch_block();
+    tslp_tsk(1000*50);
     act_tsk(RETURN_ARM);
 
     goal_pos = 3;
@@ -197,15 +217,18 @@ void run_main_course() {
     tslp_tsk(1000*50);
     robot.turn(90);
     tslp_tsk(1000*50);
-    robot.straight_line(-80, 0.0f, -1.0f, false, false, false, false, true);
-    tslp_tsk(1000*50);
-    
-    catch_motor(-5, 100);
-    rack_motor_until_stalled(1, 20);
 
-    robot.straight(-250 / 2 + 48 - 4); // 最後の値は微調整値
-    tslp_tsk(1000*50);
-    robot.turn(90);
+    robot.straight(-100);
+
+    // robot.straight_line(-80, 0.0f, -1.0f, false, false, false, false, true);
+    // tslp_tsk(1000*50);
+    //
+    // catch_motor(-5, 100);
+    // rack_motor_until_stalled(1, 20);
+    //
+    // robot.straight(-250 / 2 + 48 - 4); // 最後の値は微調整値
+    // tslp_tsk(1000*50);
+    // robot.turn(90);
 
 }
 
