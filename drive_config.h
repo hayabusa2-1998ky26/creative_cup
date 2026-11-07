@@ -22,7 +22,7 @@ namespace pybricks {
         static constexpr float right_motor_scale = 0.998f;
 
         // 制御周期 (ms) [例: 5.0f = 5ms (5,000us)]
-        static constexpr float period_ms = 15.0f;
+        static constexpr float period_ms = 16.0f;
 
         // 制御最小速度 (deg/s)
         static constexpr float min_speed = 30.0f;
@@ -58,7 +58,7 @@ namespace pybricks {
 
         // アライメント許容閾値 & 目標反射光値
         // 左右それぞれの正規化反射光の許容誤差
-        static constexpr float tolerance = 0.18f;
+        static constexpr float tolerance = 0.16f;
         static constexpr float strict_tolerance = 0.13f;
         static constexpr float target_val = 0.5f;
 

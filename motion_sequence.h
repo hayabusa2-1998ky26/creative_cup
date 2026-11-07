@@ -10,6 +10,8 @@ extern "C" {
 void catch_block();
 void return_arm(intptr_t unused);
 void init_arm(intptr_t unused);
+void take_block();
+void release_block();
 
 #ifdef __cplusplus
 }

@@ -401,7 +401,7 @@ namespace pybricks {
         return is_red;
     }
 
-    void DriveBase::straight(float distance_mm, Stop then, bool wait) {
+    void DriveBase::straight(float distance_mm, float speed_mm_per_sec, Stop then, bool wait) {
         if (fabsf(distance_mm) < 1.0f) return;
 
         float dt = control_period_ms / 1000.0f;
@@ -415,13 +415,12 @@ namespace pybricks {
 
         reset_odometry();
 
-        // ev3_lcd_set_font(EV3_FONT_MEDIUM);
-        // ev3_lcd_fill_rect(0, 0, EV3_LCD_WIDTH, EV3_LCD_HEIGHT, EV3_LCD_WHITE);
-        // ev3_lcd_draw_string("STRAIGHT MONITOR", 0, 0);
-
         float dir = (distance_mm >= 0) ? 1.0f : -1.0f;
 
-        float max_speed = (default_straight_speed / wheel_circ) * 360.0f; 
+        // ★追加: 速度の判定 (0.0f以下の場合はデフォルト速度 default_straight_speed を採用)
+        float target_speed_mm = (speed_mm_per_sec <= 0.0f) ? default_straight_speed : fabsf(speed_mm_per_sec);
+
+        float max_speed = (target_speed_mm / wheel_circ) * 360.0f; 
         float accel = (default_straight_accel / wheel_circ) * 360.0f; 
 
         float current_speed = min_speed;
@@ -440,15 +439,6 @@ namespace pybricks {
             if (abs_diff > max_abs_diff) {
                 max_abs_diff = abs_diff;
             }
-
-            // char buf1[32], buf2[32], buf3[32];
-            // snprintf(buf1, sizeof(buf1), "L_deg: %ld deg", (long)left_moved);
-            // snprintf(buf2, sizeof(buf2), "R_deg: %ld deg", (long)right_moved);
-            // snprintf(buf3, sizeof(buf3), "MaxDiff: %ld deg", (long)max_abs_diff);
-            //
-            // ev3_lcd_draw_string(buf1, 0, 25);
-            // ev3_lcd_draw_string(buf2, 0, 45);
-            // ev3_lcd_draw_string(buf3, 0, 65);
 
             float remaining_deg = target_deg - avg_moved;
             if (remaining_deg <= 0) break;
@@ -917,6 +907,7 @@ namespace pybricks {
                 if (wait_for_extra_reverse) {
                     float extra_moved_deg = fabsf((float)(cur_forward - extra_reverse_start_deg));
                     if (extra_moved_deg >= extra_reverse_target_deg) {
+                        tslp_tsk(sleep_us);
                         straight_line(0.0f, run_speed_mm, target, true, false, true, false, false);
                         return last_red_detected; // ★離脱時
                     }
@@ -954,6 +945,7 @@ namespace pybricks {
                                     wait_for_extra_reverse = true;
                                     extra_reverse_start_deg = cur_forward;
                                 } else {
+                                    tslp_tsk(sleep_us);
                                     straight_line(0.0f, run_speed_mm, target, true, is_reverse, true);
                                     return last_red_detected; // ★離脱時
                                 }

@@ -150,7 +150,7 @@ namespace pybricks {
         void set_sensor_coordinates(float sensor_x_mm, float sensor_y_mm);
         void settings(float straight_speed, float straight_acceleration = DriveConfig::straight_accel, float turn_rate = DriveConfig::turn_rate, float turn_acceleration = DriveConfig::turn_accel);
         
-        void straight(float distance_mm, Stop then = Stop::HOLD, bool wait = true);
+        void straight(float distance_mm, float speed_mm_per_sec = 0.0f, Stop then = Stop::HOLD, bool wait = true);
         void turn(float angle_deg, Stop then = Stop::HOLD, bool wait = true);
         void wide_forward(float angle_deg, float radius_mm = -1.0f, Stop then = Stop::HOLD, bool wait = true);
         void drive(float speed_mm_per_sec, float turn_rate_deg_per_sec);

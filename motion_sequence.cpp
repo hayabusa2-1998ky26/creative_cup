@@ -19,7 +19,7 @@ void catch_block() {
         rack_motor(-90, 100);
     }
     delay_little();
-    rack_motor(-50, 20);
+    rack_motor(-70, 20);
     delay();
     
     catch_motor(-65, 50);
@@ -29,7 +29,7 @@ void catch_block() {
     catch_motor(-20, 10);
     delay();
 
-    rack_motor(-430, 100);
+    rack_motor(-410, 100);
     delay();
 
     catch_motor(85, 50);
@@ -43,6 +43,15 @@ void catch_block() {
         rack_motor(200, 100);
     }
 }
+
+void take_block() {
+    rack_motor(-250, 100);
+}
+
+void release_block() {
+    rack_motor(250, 100);
+}
+
 
 extern bool is_in_progress;
 
@@ -63,13 +72,13 @@ void return_arm(intptr_t unused) {
 }
 
 void init_arm(intptr_t unused) {
-    rack_motor_until_stalled(1, 10);
-    delay();
-    
-    catch_motor_until_stalled(1, 15);
-    delay();
+    // rack_motor_until_stalled(1, 10);
+    // delay();
+    //
+    // catch_motor_until_stalled(1, 15);
+    // delay();
 
-    catch_motor(-40, 100);
+    catch_motor(-20, 100);
 
 
 

@@ -81,29 +81,35 @@ void run_main_course() {
     //     catch_block();
     //     act_tsk(RETURN_ARM);
     //     tslp_tsk(1000*1000);
+    //     // Enterボタンが押されるまで待機
+    //     ev3_speaker_play_tone(1000, 50);
+    //     while (!ev3_button_is_pressed(ENTER_BUTTON)) {
+    //         tslp_tsk(50 * 1000);
+    //     }
+    //     tslp_tsk(500 * 1000); // チャタリング防止と走行開始前のタメ
     // }
     // tslp_tsk(1000000000);
 
 
     // 開始
     ev3_speaker_play_tone(1000, 50);
-    tslp_tsk(1000*50);
+    tslp_tsk(1000*20);
     act_tsk(INIT_ARM);
-    // Enterボタンが押されるまで待機
-    ev3_speaker_play_tone(1000, 50);
-    while (!ev3_button_is_pressed(ENTER_BUTTON)) {
-        tslp_tsk(50 * 1000);
-    }
-    tslp_tsk(500 * 1000); // チャタリング防止と走行開始前のタメ
-    tslp_tsk(1000*50);
+    // // Enterボタンが押されるまで待機
+    // ev3_speaker_play_tone(1000, 50);
+    // while (!ev3_button_is_pressed(ENTER_BUTTON)) {
+    //     tslp_tsk(50 * 1000);
+    // }
+    // tslp_tsk(500 * 1000); // チャタリング防止と走行開始前のタメ
+    tslp_tsk(1000*20);
     robot.straight_line(330, 0.0f, -1.0f, false, false, false, false, true);
     tslp_tsk(1000 * 100);
 
-    robot.straight(15);
+    robot.straight(17);
     tslp_tsk(1000 * 100);
     
     robot.turn(88);
-    tslp_tsk(1000*50);
+    tslp_tsk(1000*20);
 
     // 色読み
     robot.straight_lines(4, LINE_INTERVAL_START + LINE_INTERVAL * 3 - 80 + 40, Opt().on_line(&color_reading, 128).with_red_mind()); // 40は微調整値
@@ -137,10 +143,10 @@ void run_main_course() {
     }
 
     colors[(int)(std::max_element(b_score, b_score + 4) - b_score)] = 'b';
-    n_score[(int)(std::max_element(b_score, b_score + 4) - b_score)] = 999;
+    n_score[(int)(std::max_element(b_score, b_score + 4) - b_score)] = 9999.0f;
     colors[(int)(std::min_element(n_score, n_score + 4) - n_score)] = 'n';
-    y_score[(int)(std::max_element(b_score, b_score + 4) - b_score)] = 0;
-    y_score[(int)(std::min_element(n_score, n_score + 4) - n_score)] = 0;
+    y_score[(int)(std::max_element(b_score, b_score + 4) - b_score)] = -9999.0f;
+    y_score[(int)(std::min_element(n_score, n_score + 4) - n_score)] = -9999.0f;
     colors[(int)(std::max_element(y_score, y_score + 4) - y_score)] = 'y';
 
     for (int i = 0; i < 4; i++) {
@@ -190,7 +196,7 @@ void run_main_course() {
     for (int i = 0; i < 3; i++) {
         // オブジェクト入れる
         while (is_in_progress) {
-            tslp_tsk(1000*50);
+            tslp_tsk(1000*20);
         }
 
         catch_block();
@@ -206,28 +212,54 @@ void run_main_course() {
 
     // 最後のオブジェクトだけ別処理
     catch_block();
-    tslp_tsk(1000*50);
+    tslp_tsk(1000*20);
     act_tsk(RETURN_ARM);
 
     goal_pos = 3;
     robot.straight_lines(ago_pos - goal_pos, abs(ago_pos - goal_pos) * LINE_INTERVAL, Opt().with_red_mind());
+    tslp_tsk(1000*20);
     
     // ゴール
     robot.straight(48 - LINE_INTERVAL_START);
-    tslp_tsk(1000*50);
+    tslp_tsk(1000*20);
     robot.turn(90);
-    tslp_tsk(1000*50);
+    tslp_tsk(1000*20);
 
     robot.straight(-100);
 
-    // robot.straight_line(-80, 0.0f, -1.0f, false, false, false, false, true);
+    // サプライズ用ゴール
+    // robot.turn(-30);
+    // tslp_tsk(1000*20);
+    // robot.straight(-200);
+    // tslp_tsk(1000*20);
+    // robot.turn(30);
+    // tslp_tsk(1000*20);
+    // robot.straight_lines(-1, 200, Opt());
+    // tslp_tsk(1000*20);
+    // robot.straight(48 + 10);
+    // tslp_tsk(1000*20);
+    //
+    // robot.turn(90);
     // tslp_tsk(1000*50);
+    // robot.straight_line(100);
+    // tslp_tsk(1000*50);
+    //
+    // robot.straight(200, 200.0f);
+    // tslp_tsk(1000*20);
+    //
+    // take_block();
+    // robot.straight(-580);
+    //
+
+
+    // robot.straight_line(-80, 0.0f, -1.0f, false, false, false, false, true);
+    // tslp_tsk(1000*20);
     //
     // catch_motor(-5, 100);
     // rack_motor_until_stalled(1, 20);
     //
     // robot.straight(-250 / 2 + 48 - 4); // 最後の値は微調整値
-    // tslp_tsk(1000*50);
+    // tslp_tsk(1000*20);
     // robot.turn(90);
 
 }
