@@ -377,15 +377,15 @@ namespace pybricks {
 
         if (dir >= 0.0f) {
             if ((float)rgb_val.r < avg_gb * 1.6f) {
-                offset = -1.3f;
+                offset = -1.0f;
                 ev3_speaker_play_tone(500, 50);
             } else {
-                offset = 1.0f;
+                offset = 1.2f;
                 ev3_speaker_play_tone(2000, 50);
             }
         } else {
             if ((float)rgb_val.r < avg_gb * 1.6f) {
-                offset = 0.3f;
+                offset = -0.3;
                 ev3_speaker_play_tone(500, 50);
             } else {
                 offset = 2.0f;

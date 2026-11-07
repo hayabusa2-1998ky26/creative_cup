@@ -74,7 +74,6 @@ void run_main_course() {
     
     // tslp_tsk(1000*100);
     // act_tsk(INIT_ARM);
-    // robot.straight_lines(4, LINE_INTERVAL * 3 - 80 + 128, Opt().with_red_mind());
     // act_tsk(INIT_ARM);
     // tslp_tsk(1000*1000*5);
     // while (1) {
@@ -88,6 +87,7 @@ void run_main_course() {
     //     }
     //     tslp_tsk(500 * 1000); // チャタリング防止と走行開始前のタメ
     // }
+    // robot.straight_lines(4, LINE_INTERVAL * 3 - 80 + 128, Opt().with_red_mind());
     // tslp_tsk(1000000000);
 
 
@@ -112,7 +112,7 @@ void run_main_course() {
     tslp_tsk(1000*20);
 
     // 色読み
-    robot.straight_lines(4, LINE_INTERVAL_START + LINE_INTERVAL * 3 - 80 + 40, Opt().on_line(&color_reading, 128).with_red_mind()); // 40は微調整値
+    robot.straight_lines(4, LINE_INTERVAL_START + LINE_INTERVAL * 3 - 80 + 10, Opt().on_line(&color_reading, 128).with_red_mind()); // 10は微調整値
     robot.straight(128);
     color_reading();
     // robot.straight_lines(4, LINE_INTERVAL_START + LINE_INTERVAL * 3 - 80 + 140 + 40, &color_reading, 128, 0.0f, -1.0f, true, 140); // 40は微調整値
@@ -139,7 +139,7 @@ void run_main_course() {
         
         b_score[i] = b - (r + g) / 2.0f;
         n_score[i] = abs(r - g) + abs(g - b) + abs(b - r);
-        y_score[i] = g - (r + b) / 2.0f;
+        y_score[i] = g - b;
     }
 
     colors[(int)(std::max_element(b_score, b_score + 4) - b_score)] = 'b';
@@ -182,7 +182,7 @@ void run_main_course() {
     //
     // ev3_speaker_play_tone(1000, 50);
     // while (!ev3_button_is_pressed(ENTER_BUTTON)) {
-    //     tslp_tsk(10 * 1000);
+    //     tslp_tsk(20 * 1000);
     // }
     // tslp_tsk(500 * 1000); // チャタリング防止と走行開始前のタメ
     tslp_tsk(100 * 1000);

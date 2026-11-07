@@ -14,12 +14,14 @@ extern bool is_last_red;
 
 void catch_block() {
     if (is_last_red) {
-        rack_motor(-70, 100);
+        rack_motor(-80, 100);
     } else {
-        rack_motor(-90, 100);
+        rack_motor(-100, 100);
     }
     delay_little();
-    rack_motor(-70, 20);
+    rack_motor(-30, 15);
+    delay_little();
+    rack_motor(-30, 20);
     delay();
     
     catch_motor(-65, 50);
